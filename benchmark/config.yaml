@@ -1,0 +1,61 @@
+# benchmark/config.yaml
+# Test matrix for the TPC-DS SQL endpoint benchmark.
+# All fields are used by benchmark/runner.py.
+
+# Fabric capacity (required for cold-cache pause/resume)
+capacity:
+  subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+  resource_group: "${AZURE_RESOURCE_GROUP}"
+  capacity_name: "${FABRIC_CAPACITY_NAME}"
+  pause_timeout_sec: 600   # 10 minutes
+  resume_timeout_sec: 600
+
+# SQL endpoints
+endpoints:
+  lakehouse_default:
+    server: "${LAKEHOUSE_SERVER}"
+    database: "${LAKEHOUSE_DATABASE}"
+    description: "Lakehouse — no partition, no Z-order, no V-order"
+
+  lakehouse_partitioned:
+    server: "${LAKEHOUSE_SERVER}"
+    database: "${LAKEHOUSE_DATABASE}"
+    description: "Lakehouse — PARTITION BY ss_sold_date_sk"
+
+  lakehouse_zorder:
+    server: "${LAKEHOUSE_SERVER}"
+    database: "${LAKEHOUSE_DATABASE}"
+    description: "Lakehouse — Z-ORDER BY ss_item_sk, ss_store_sk"
+
+  lakehouse_vorder:
+    server: "${LAKEHOUSE_SERVER}"
+    database: "${LAKEHOUSE_DATABASE}"
+    description: "Lakehouse — V-Order enabled at write time"
+
+  warehouse:
+    server: "${WAREHOUSE_SERVER}"
+    database: "${WAREHOUSE_DATABASE}"
+    description: "Fabric Warehouse — standard configuration"
+
+# Scale factors to test (must match ingested data)
+scale_factors:
+  - SF10
+  - SF100
+  - SF1000
+
+# SQL query files (relative to project root)
+queries:
+  q01: sql/q01_simple_agg.sql
+  q02: sql/q02_large_join.sql
+  q03: sql/q03_top_n_selective.sql
+  q04: sql/q04_complex_tpcds.sql
+  q05: sql/q05_window_function.sql
+
+# Warm repetitions (cold is always 1 rep per SF block)
+warm_repetitions: 3
+
+# Query timeout in seconds (per execution)
+query_timeout_sec: 300
+
+# Output directory for results
+results_dir: results
