@@ -15,17 +15,12 @@ endpoints:
   lakehouse_default:
     server: "${LAKEHOUSE_SERVER}"
     database: "${LAKEHOUSE_DATABASE}"
-    description: "Lakehouse — no partition, no Z-order, no V-order"
+    description: "Lakehouse — no partition, no V-order"
 
   lakehouse_partitioned:
     server: "${LAKEHOUSE_SERVER}"
     database: "${LAKEHOUSE_DATABASE}"
     description: "Lakehouse — PARTITION BY ss_sold_date_sk"
-
-  lakehouse_zorder:
-    server: "${LAKEHOUSE_SERVER}"
-    database: "${LAKEHOUSE_DATABASE}"
-    description: "Lakehouse — Z-ORDER BY ss_item_sk, ss_store_sk"
 
   lakehouse_vorder:
     server: "${LAKEHOUSE_SERVER}"
