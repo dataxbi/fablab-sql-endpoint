@@ -1,8 +1,8 @@
 # Especificaciones del Proyecto: Benchmark TPC-DS — Lakehouse SQL Endpoint vs Fabric Warehouse
 
-**Versión**: 1.1  
+**Versión**: 1.2  
 **Autor**: Nelson López  
-**Fecha**: 2026-04-05  
+**Fecha**: 2026-04-06  
 **Estado**: Revisado
 
 ---
@@ -11,7 +11,7 @@
 
 Comparar el rendimiento del **SQL endpoint de un Fabric Lakehouse** frente a un **Fabric Warehouse** ejecutando un conjunto representativo de queries inspiradas en el benchmark **TPC-DS**, bajo distintas condiciones de escala de datos, estado de caché y configuración de tablas.
 
-El resultado del proyecto es un conjunto de métricas objetivas (latencias, fiabilidad) que permitan tomar decisiones fundadas sobre qué motor SQL usar en Microsoft Fabric según el patrón de carga de trabajo.
+El resultado del proyecto será un conjunto de métricas objetivas (latencias, fiabilidad) que permitirán tomar decisiones fundadas sobre qué motor SQL usar en Microsoft Fabric según el patrón de carga de trabajo.
 
 ---
 
@@ -44,11 +44,11 @@ El resultado del proyecto es un conjunto de métricas objetivas (latencias, fiab
 | Lakehouse | `LH_01` (con esquema) (configurable) | Fabric Lakehouse |
 | Warehouse | `WH_01` (configurable) | Fabric Warehouse |
 
-El nombre del workspace es configurable mediante el argumento `--workspace` o la variable de entorno `FABRIC_WORKSPACE_NAME`.
-El nombre del Lakehouse es configurable mediante el argumento `--lh` o la variable de entorno `FABRIC_LAKEHOUSE_NAME`.
-El nombre del Warehouse es configurable mediante el argumento `--wh` o la variable de entorno `FABRIC_WAREHOUSE_NAME`.
+El nombre del workspace será configurable mediante el argumento `--workspace` o la variable de entorno `FABRIC_WORKSPACE_NAME`.
+El nombre del Lakehouse será configurable mediante el argumento `--lh` o la variable de entorno `FABRIC_LAKEHOUSE_NAME`.
+El nombre del Warehouse será configurable mediante el argumento `--wh` o la variable de entorno `FABRIC_WAREHOUSE_NAME`.
 
-El aprovisionamiento se realiza mediante el script `provision/setup_fabric.py`, que usa **Azure CLI** (`az rest`) con autenticación interactiva (`az login`).
+El aprovisionamiento se realizará mediante el script `provision/setup_fabric.py`, que usará **Azure CLI** (`az rest`) con autenticación interactiva (`az login`).
 
 ---
 
@@ -79,7 +79,7 @@ El aprovisionamiento se realiza mediante el script `provision/setup_fabric.py`, 
 - Herramienta: **dsdgen** (TPC-DS Data Generator, parte de `tpcds-kit`)
 - Formato de salida: **CSV** (formato nativo de dsdgen, sin conversión adicional)
 - Script: `data_generation/generate_csv.py`
-- Los datos se almacenan en `data/sfXX/` y **no se incluyen en el repositorio** (excluidos por `.gitignore`)
+- Los datos se almacenarán en `data/sfXX/` y **no se incluirán en el repositorio** (excluidos por `.gitignore`)
 
 ---
 
@@ -94,7 +94,7 @@ Se probará el mismo conjunto de queries sobre tres configuraciones de las tabla
 | `zorder` | Z-order en columnas de join/filtro frecuentes | Ninguna | `ss_item_sk`, `ss_store_sk` | No |
 | `vorder` | V-Order habilitado en todas las tablas | Ninguna | No | **Sí** |
 
-El Warehouse **no tiene configuraciones variables** — se prueba con la configuración estándar.
+El Warehouse **no tendrá configuraciones variables** — se probará con la configuración estándar.
 
 ---
 
@@ -155,7 +155,7 @@ Caché:        cold (1 rep) | warm (3 reps)
 
 ### Orden de ejecución por bloque de scale factor
 
-Las ejecuciones se agrupan por bloque de SF para minimizar los ciclos de pausa/reanudación (3 en total):
+Las ejecuciones se agruparán por bloque de SF para minimizar los ciclos de pausa/reanudación (3 en total):
 
 ```
 Para cada scale_factor en [SF10, SF100, SF1000]:
@@ -166,10 +166,10 @@ Para cada scale_factor en [SF10, SF100, SF1000]:
      → capacidad ya caliente, cachés precargados
   4. Pausar capacidad → polling hasta estado Paused
 
-Al terminar el último SF: capacidad queda pausada (ya cubierto por el paso 4 del último bloque)
+Al terminar el último SF: la capacidad quedará pausada (ya cubierto por el paso 4 del último bloque)
 ```
 
-- **Cold** (primera ejecución tras reanudación de capacidad): garantiza cachés de memoria completamente vacíos
+- **Cold** (primera ejecución tras reanudación de capacidad): garantizará cachés de memoria completamente vacíos
 - **Warm** (ejecuciones sobre capacidad caliente): misma conexión, motor ya con datos en caché
 
 > ⚠️ **Nota operativa**: las operaciones de pausa y reanudación pueden tardar entre 3 y 8 minutos. El módulo `provision/capacity_manager.py` implementa polling con reintentos hasta confirmar el estado final antes de continuar.
@@ -178,7 +178,7 @@ Al terminar el último SF: capacidad queda pausada (ya cubierto por el paso 4 de
 
 ## 8. Métricas capturadas
 
-Por cada ejecución individual se registra:
+Por cada ejecución individual se registrará:
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
@@ -194,7 +194,7 @@ Por cada ejecución individual se registra:
 | `status` | string | `success`, `error`, `timeout` |
 | `error_message` | string | Mensaje de error (si aplica) |
 
-**Salida**: `results/benchmark_{timestamp}.csv` y `results/benchmark_{timestamp}.json`
+**Salida**: los resultados se guardarán en `results/benchmark_{timestamp}.csv` y `results/benchmark_{timestamp}.json`
 
 ---
 
