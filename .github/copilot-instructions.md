@@ -20,7 +20,7 @@ fablab-sql-endpoint/
 ├── data_generation/
 │   └── generate_csv.py               ← dsdgen wrapper, outputs native CSV
 ├── ingestion/
-│   ├── 01_lakehouse_ingest.ipynb     ← Spark: CSV → Delta (4 configs)
+│   ├── 01_lakehouse_ingest.ipynb     ← Spark: CSV → Delta (3 configs)
 │   ├── 02_warehouse_ingest.ipynb     ← Spark/SQL: CSV → Warehouse
 │   └── table_configs.py              ← Delta table config definitions
 ├── sql/
@@ -53,20 +53,20 @@ fablab-sql-endpoint/
 | `lakehouse_vorder` | Lakehouse SQL endpoint | V-Order enabled at write time |
 | `warehouse` | Fabric Warehouse | Standard configuration |
 
-> **Note on OPTIMIZE**: after ingesting each configuration, `OPTIMIZE` (without ZORDER) is run on all tables for Parquet file compaction. This is standard Delta maintenance, not a benchmark configuration. ZORDER was discarded due to disproportionate cost at SF1000 (tens of hours even on F128).
+> **Note on OPTIMIZE**: after ingesting each configuration, `OPTIMIZE` (without ZORDER) is run on all tables for Parquet file compaction. This is standard Delta maintenance, not a benchmark configuration. ZORDER was discarded due to disproportionate cost at scale (tens of hours at SF1000 even on F128).
 
 ---
 
 ## Test Matrix
 
-- **Scale factors**: SF10 (~10 GB), SF100 (~100 GB), SF1000 (~1 TB)
+- **Scale factors**: SF10 (~10 GB), SF100 (~100 GB), SF300 (~300 GB)
 - **Queries**: Q1–Q5 (see `sql/`)
 - **Cache modes**: cold (first run after capacity resume), warm (3 repetitions on hot capacity)
 - **Total executions**: 240 (cold: 60, warm: 180) + 3 capacity pause/resume cycles
 
 ### Execution Order (per Scale Factor block)
 ```
-For each SF in [SF10, SF100, SF1000]:
+For each SF in [SF10, SF100, SF300]:
   1. Resume Fabric capacity → poll until Active
   2. Cold block: run all (endpoint × query) once — true cold cache
   3. Warm block: run all (endpoint × query) 3 times — hot cache
@@ -94,6 +94,7 @@ For each SF in [SF10, SF100, SF1000]:
 6. **Read-only queries** — all benchmark queries are SELECT statements, ensuring compatibility with both endpoints without permission differences.
 7. **Timeout per query** — configurable in `config.yaml` to prevent slow queries from blocking the suite.
 8. **pyarrow removed** — data format is native CSV from dsdgen; no Parquet conversion needed.
+9. **Schema-per-config for Lakehouse** — each of the 3 Lakehouse configs writes to its own schema within the same Lakehouse database: `benchmark_default`, `benchmark_partitioned`, `benchmark_vorder`. SQL queries have no schema prefix; the runner executes `USE {schema}` immediately after connecting for Lakehouse endpoints. The `warehouse` endpoint has no `schema` field and uses its default schema.
 
 ---
 
@@ -104,7 +105,7 @@ For each SF in [SF10, SF100, SF1000]:
 | `run_id` | UUID | Unique execution identifier |
 | `timestamp` | datetime | Start time of the execution |
 | `endpoint` | string | One of the 4 endpoint IDs above |
-| `scale_factor` | string | `SF10`, `SF100`, `SF1000` |
+| `scale_factor` | string | `SF10`, `SF100`, `SF300` |
 | `query_id` | string | `q01`–`q05` |
 | `cache_mode` | string | `cold` or `warm` |
 | `repetition` | int | Repetition number (1, 2, 3) |
