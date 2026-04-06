@@ -28,10 +28,14 @@ the initial Linux setup (username + password).
 Inside the WSL terminal:
 
 ```bash
-sudo apt update && sudo apt install -y build-essential flex bison git
+sudo apt update && sudo apt install -y build-essential flex bison git python3-full
 ```
 
 ### Step 3 — Clone and compile tpcds-kit
+
+> **Important**: clone into your Linux home directory (`~`), **not** into
+> `/mnt/c/...`. The Windows filesystem does not support the file permissions
+> that `git` and `make` require.
 
 ```bash
 cd ~
@@ -42,36 +46,52 @@ make OS=LINUX
 
 The `dsdgen` binary will be at `~/tpcds-kit/tools/dsdgen`.
 
-### Step 4 — Locate the project from WSL
+### Step 4 — Create a Linux-native Python virtual environment
 
-Your Windows filesystem is mounted at `/mnt/c/` inside WSL.
-The project root is typically:
+The project `.venv` was created on Windows and does not work in WSL.
+Create a dedicated venv inside the Linux filesystem instead.
+
+`python3-full` (already installed in Step 2) includes `venv` support.
+The data generation script only needs two packages from the full
+`requirements.txt` — the rest (pyodbc, jupyter, etc.) are only needed on
+Windows for running the benchmark and analysis:
 
 ```bash
-cd /mnt/c/Users/<your-username>/fablab-sql-endpoint
+python3 -m venv ~/venv-tpcds
+source ~/venv-tpcds/bin/activate
+pip install pyyaml python-dotenv
+```
+
+Activate this venv every time you open a new WSL terminal for data generation:
+
+```bash
+source ~/venv-tpcds/bin/activate
 ```
 
 ### Step 5 — Generate the data
 
-Still inside WSL, with the project directory as your working directory:
+> **Important**: use a Linux output directory (e.g. `~/tpcds-data`).
+> Writing directly to `/mnt/c/...` can cause permission errors with dsdgen.
 
 ```bash
+cd /mnt/c/Users/<your-username>/source/repos/fablab-sql-endpoint
+
 # SF10 only (~10 GB — recommended first run to validate everything)
-python data_generation/generate_csv.py --sf 10 \
+python data_generation/generate_csv.py \
+    --sf 10 \
     --dsdgen ~/tpcds-kit/tools/dsdgen \
-    --out data
+    --out ~/tpcds-data
 
 # SF10 + SF100 + SF1000
-python data_generation/generate_csv.py --sf 10 100 1000 \
+python data_generation/generate_csv.py \
+    --sf 10 100 1000 \
     --dsdgen ~/tpcds-kit/tools/dsdgen \
-    --out data
+    --out ~/tpcds-data
 ```
 
-> **Tip**: if the WSL `python` command is not found, use `python3` or activate
-> the project virtual environment first:
-> ```bash
-> source .venv/bin/activate
-> ```
+After generation, upload the CSV files from `~/tpcds-data` to the Fabric
+Lakehouse Files section (`Files/tpcds/sfXX/`) before running the ingestion
+notebooks.
 
 ### Approximate generation times
 
