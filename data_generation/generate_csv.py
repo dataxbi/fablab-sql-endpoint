@@ -69,8 +69,10 @@ def generate(scale_factor: int, output_base: Path, dsdgen_bin: str) -> Path:
         "-FORCE",            # overwrite existing files
         "-QUIET",
     ]
+    # dsdgen must run from its own directory to locate tpcds.idx
+    dsdgen_dir = Path(dsdgen_bin).resolve().parent
     logger.debug("Running: %s", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=sf_dir)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=dsdgen_dir)
 
     if result.returncode != 0:
         raise RuntimeError(
