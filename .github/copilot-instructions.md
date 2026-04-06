@@ -48,11 +48,12 @@ fablab-sql-endpoint/
 
 | Endpoint ID | Type | Delta Config |
 |-------------|------|--------------|
-| `lakehouse_default` | Lakehouse SQL endpoint | No partition, no Z-order, no V-order |
+| `lakehouse_default` | Lakehouse SQL endpoint | No partition, no V-order |
 | `lakehouse_partitioned` | Lakehouse SQL endpoint | PARTITION BY `ss_sold_date_sk` |
-| `lakehouse_zorder` | Lakehouse SQL endpoint | Z-ORDER BY `ss_item_sk`, `ss_store_sk` |
 | `lakehouse_vorder` | Lakehouse SQL endpoint | V-Order enabled at write time |
 | `warehouse` | Fabric Warehouse | Standard configuration |
+
+> **Note on OPTIMIZE**: after ingesting each configuration, `OPTIMIZE` (without ZORDER) is run on all tables for Parquet file compaction. This is standard Delta maintenance, not a benchmark configuration. ZORDER was discarded due to disproportionate cost at SF1000 (tens of hours even on F128).
 
 ---
 
@@ -61,7 +62,7 @@ fablab-sql-endpoint/
 - **Scale factors**: SF10 (~10 GB), SF100 (~100 GB), SF1000 (~1 TB)
 - **Queries**: Q1–Q5 (see `sql/`)
 - **Cache modes**: cold (first run after capacity resume), warm (3 repetitions on hot capacity)
-- **Total executions**: 300 (cold: 75, warm: 225) + 3 capacity pause/resume cycles
+- **Total executions**: 240 (cold: 60, warm: 180) + 3 capacity pause/resume cycles
 
 ### Execution Order (per Scale Factor block)
 ```
@@ -102,7 +103,7 @@ For each SF in [SF10, SF100, SF1000]:
 |-------|------|-------------|
 | `run_id` | UUID | Unique execution identifier |
 | `timestamp` | datetime | Start time of the execution |
-| `endpoint` | string | One of the 5 endpoint IDs above |
+| `endpoint` | string | One of the 4 endpoint IDs above |
 | `scale_factor` | string | `SF10`, `SF100`, `SF1000` |
 | `query_id` | string | `q01`–`q05` |
 | `cache_mode` | string | `cold` or `warm` |

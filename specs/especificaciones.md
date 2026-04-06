@@ -1,6 +1,6 @@
 # Especificaciones del Proyecto: Benchmark TPC-DS — Lakehouse SQL Endpoint vs Fabric Warehouse
 
-**Versión**: 1.2  
+**Versión**: 1.3  
 **Autor**: Nelson López  
 **Fecha**: 2026-04-06  
 **Estado**: Revisado
@@ -21,7 +21,7 @@ El resultado del proyecto será un conjunto de métricas objetivas (latencias, f
 - Ejecución y medición de queries SELECT sobre dos endpoints SQL de Fabric
 - Variación de escala de datos: SF10 (~10 GB), SF100 (~100 GB), SF1000 (~1 TB)
 - Medición con caché fría (cold) y caché caliente (warm)
-- Varias configuraciones de tabla en el Lakehouse: sin partición, particionado por fecha, Z-order, V-order
+- Varias configuraciones de tabla en el Lakehouse: sin partición, particionado por fecha, V-order
 - Generación de datos TPC-DS en formato CSV (herramienta externa, no se mide)
 - Ingesta de datos en Lakehouse y Warehouse (no se mide)
 - Exportación de resultados a CSV y JSON
@@ -87,12 +87,13 @@ El aprovisionamiento se realizará mediante el script `provision/setup_fabric.py
 
 Se probará el mismo conjunto de queries sobre tres configuraciones de las tablas Delta en el Lakehouse:
 
-| Config | Descripción | Partición | Z-Order | V-Order |
-|--------|-------------|-----------|---------|---------|
-| `default` | Sin optimizaciones adicionales | Ninguna | No | No |
-| `partitioned` | Particionado por columna de fecha | `ss_sold_date_sk` | No | No |
-| `zorder` | Z-order en columnas de join/filtro frecuentes | Ninguna | `ss_item_sk`, `ss_store_sk` | No |
-| `vorder` | V-Order habilitado en todas las tablas | Ninguna | No | **Sí** |
+| Config | Descripción | Partición | V-Order |
+|--------|-------------|-----------|---------|
+| `default` | Sin optimizaciones adicionales | Ninguna | No |
+| `partitioned` | Particionado por columna de fecha | `ss_sold_date_sk` | No |
+| `vorder` | V-Order habilitado en todas las tablas | Ninguna | **Sí** |
+
+> **Nota sobre OPTIMIZE**: tras la ingesta de cada configuración se ejecuta `OPTIMIZE` (sin ZORDER) en todas las tablas para compactar ficheros Parquet pequeños generados por Spark. Esto no constituye una configuración de benchmark en sí misma, sino una práctica estándar de mantenimiento Delta. El ZORDER fue descartado por su coste desproporcionado a SF1000 (decenas de horas incluso en F128).
 
 El Warehouse **no tendrá configuraciones variables** — se probará con la configuración estándar.
 
@@ -142,16 +143,16 @@ Cinco queries SQL representativas, basadas en TPC-DS y adaptadas para ser compar
 ## 7. Matriz de pruebas
 
 ```
-Endpoints:    lakehouse_default | lakehouse_partitioned | lakehouse_zorder | lakehouse_vorder | warehouse
+Endpoints:    lakehouse_default | lakehouse_partitioned | lakehouse_vorder | warehouse
 Scale factor: SF10 | SF100 | SF1000
 Queries:      Q1 | Q2 | Q3 | Q4 | Q5
 Caché:        cold (1 rep) | warm (3 reps)
 ```
 
 **Total de ejecuciones**:
-- Cold: 5 endpoints × 3 SF × 5 queries × 1 rep = **75 ejecuciones**
-- Warm: 5 endpoints × 3 SF × 5 queries × 3 reps = **225 ejecuciones**
-- **Total: 300 ejecuciones** + 3 ciclos de pausa/reanudación de capacidad (uno por SF)
+- Cold: 4 endpoints × 3 SF × 5 queries × 1 rep = **60 ejecuciones**
+- Warm: 4 endpoints × 3 SF × 5 queries × 3 reps = **180 ejecuciones**
+- **Total: 240 ejecuciones** + 3 ciclos de pausa/reanudación de capacidad (uno por SF)
 
 ### Orden de ejecución por bloque de scale factor
 
@@ -184,7 +185,7 @@ Por cada ejecución individual se registrará:
 |-------|------|-------------|
 | `run_id` | UUID | Identificador único de la ejecución |
 | `timestamp` | datetime | Momento de inicio de la ejecución |
-| `endpoint` | string | `lakehouse_default`, `lakehouse_partitioned`, `lakehouse_zorder`, `lakehouse_vorder`, `warehouse` |
+| `endpoint` | string | `lakehouse_default`, `lakehouse_partitioned`, `lakehouse_vorder`, `warehouse` |
 | `scale_factor` | string | `SF10`, `SF100`, `SF1000` |
 | `query_id` | string | `q01`–`q05` |
 | `cache_mode` | string | `cold`, `warm` |
