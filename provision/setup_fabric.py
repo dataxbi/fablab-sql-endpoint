@@ -34,20 +34,23 @@ FABRIC_API = "https://api.fabric.microsoft.com/v1"
 # ---------------------------------------------------------------------------
 
 def _az_rest(method: str, url: str, body: dict | None = None) -> dict:
-    cmd = ["az", "rest", "--method", method, "--url", url]
+    cmd = [
+        "az", "rest", "--method", method, "--url", url,
+        "--resource", "https://api.fabric.microsoft.com",
+    ]
     if body:
         cmd += ["--body", json.dumps(body)]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
     if result.returncode != 0:
         raise RuntimeError(f"az rest {method.upper()} {url} failed:\n{result.stderr.strip()}")
     return json.loads(result.stdout) if result.stdout.strip() else {}
 
 
 def _ensure_az_login() -> None:
-    result = subprocess.run(["az", "account", "show"], capture_output=True, text=True)
+    result = subprocess.run(["az", "account", "show"], capture_output=True, text=True, shell=True)
     if result.returncode != 0:
         logger.info("Not logged in to Azure CLI. Running az login...")
-        subprocess.run(["az", "login"], check=True)
+        subprocess.run(["az", "login"], check=True, shell=True)
 
 
 # ---------------------------------------------------------------------------
@@ -83,10 +86,18 @@ def _create_item(workspace_id: str, item_type: str, name: str) -> dict:
     return _az_rest("post", f"{FABRIC_API}/workspaces/{workspace_id}/items", body)
 
 
-def _get_sql_endpoint(workspace_id: str, item_id: str) -> dict:
+def _get_sql_endpoint(workspace_id: str, item_id: str, item_type: str) -> dict:
     """Retrieve SQL endpoint connection details for a Lakehouse or Warehouse."""
-    data = _az_rest("get", f"{FABRIC_API}/workspaces/{workspace_id}/items/{item_id}")
-    return data.get("properties", {}).get("sqlEndpointProperties", {})
+    type_path = "lakehouses" if item_type == "Lakehouse" else "warehouses"
+    data = _az_rest("get", f"{FABRIC_API}/workspaces/{workspace_id}/{type_path}/{item_id}")
+    props = data.get("properties", {})
+    if item_type == "Lakehouse":
+        return props.get("sqlEndpointProperties", {})
+    # Warehouse: connectionString is at top-level of properties
+    return {
+        "connectionString": props.get("connectionString", ""),
+        "id": data.get("id", ""),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +161,8 @@ def main() -> None:
         logger.info("Warehouse created (id: %s).", wh["id"])
 
     # --- SQL endpoint info ---
-    lh_ep = _get_sql_endpoint(workspace_id, lh["id"])
-    wh_ep = _get_sql_endpoint(workspace_id, wh["id"])
+    lh_ep = _get_sql_endpoint(workspace_id, lh["id"], "Lakehouse")
+    wh_ep = _get_sql_endpoint(workspace_id, wh["id"], "Warehouse")
 
     print("\n" + "=" * 60)
     print("PROVISIONING COMPLETE")
