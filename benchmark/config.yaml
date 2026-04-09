@@ -15,16 +15,19 @@ endpoints:
   lakehouse_default:
     server: "${LAKEHOUSE_SERVER}"
     database: "${LAKEHOUSE_DATABASE}"
+    schema: "benchmark_default"
     description: "Lakehouse — no partition, no V-order"
 
   lakehouse_partitioned:
     server: "${LAKEHOUSE_SERVER}"
     database: "${LAKEHOUSE_DATABASE}"
+    schema: "benchmark_partitioned"
     description: "Lakehouse — PARTITION BY ss_sold_date_sk"
 
   lakehouse_vorder:
     server: "${LAKEHOUSE_SERVER}"
     database: "${LAKEHOUSE_DATABASE}"
+    schema: "benchmark_vorder"
     description: "Lakehouse — V-Order enabled at write time"
 
   warehouse:
@@ -36,7 +39,6 @@ endpoints:
 scale_factors:
   - SF10
   - SF100
-  - SF1000
 
 # SQL query files (relative to project root)
 queries:

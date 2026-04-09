@@ -69,8 +69,11 @@ def run_query(
 ) -> RunResult:
     server = os.path.expandvars(endpoint_cfg["server"])
     database = os.path.expandvars(endpoint_cfg["database"])
+    schema = endpoint_cfg.get("schema")
 
     with get_connection(server, database) as conn:
+        if schema:
+            conn.execute(f"USE [{schema}]")
         with Timer() as t:
             rows, status = _execute_query(conn, sql, timeout_sec)
 
