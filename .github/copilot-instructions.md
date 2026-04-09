@@ -53,20 +53,20 @@ fablab-sql-endpoint/
 | `lakehouse_vorder` | Lakehouse SQL endpoint | V-Order enabled at write time |
 | `warehouse` | Fabric Warehouse | Standard configuration |
 
-> **Note on OPTIMIZE**: after ingesting each configuration, `OPTIMIZE` (without ZORDER) is run on all tables for Parquet file compaction. This is standard Delta maintenance, not a benchmark configuration. ZORDER was discarded due to disproportionate cost at scale (tens of hours at SF1000 even on F128).
+> **Note on OPTIMIZE**: after ingesting each configuration, `OPTIMIZE` (without ZORDER) is run on all tables for Parquet file compaction. This is standard Delta maintenance, not a benchmark configuration. ZORDER was discarded due to disproportionate cost at scale.
 
 ---
 
 ## Test Matrix
 
-- **Scale factors**: SF10 (~10 GB), SF100 (~100 GB), SF300 (~300 GB)
+- **Scale factors**: SF10 (~10 GB), SF100 (~100 GB)
 - **Queries**: Q1–Q5 (see `sql/`)
 - **Cache modes**: cold (first run after capacity resume), warm (3 repetitions on hot capacity)
-- **Total executions**: 240 (cold: 60, warm: 180) + 3 capacity pause/resume cycles
+- **Total executions**: 160 (cold: 40, warm: 120) + 2 capacity pause/resume cycles
 
 ### Execution Order (per Scale Factor block)
 ```
-For each SF in [SF10, SF100, SF300]:
+For each SF in [SF10, SF100]:
   1. Resume Fabric capacity → poll until Active
   2. Cold block: run all (endpoint × query) once — true cold cache
   3. Warm block: run all (endpoint × query) 3 times — hot cache
@@ -86,7 +86,7 @@ For each SF in [SF10, SF100, SF300]:
 
 ## Key Design Decisions
 
-1. **Cold cache via capacity pause/resume** — the only reliable way to flush all in-memory caches in Fabric. Grouped by SF block (3 cycles total, not one per query).
+1. **Cold cache via capacity pause/resume** — the only reliable way to flush all in-memory caches in Fabric. Grouped by SF block (2 cycles total, not one per query).
 2. **Secrets via environment variables only** — never hardcoded. See `.env.example`.
 3. **Configurable resource names** — workspace, lakehouse and warehouse names are all configurable via CLI args (`--workspace`, `--lh`, `--wh`) or env vars (`FABRIC_WORKSPACE_NAME`, `FABRIC_LAKEHOUSE_NAME`, `FABRIC_WAREHOUSE_NAME`).
 4. **capacity_manager.py is a standalone module** — reused by both `setup_fabric.py` and `benchmark/runner.py`. It polls the Fabric REST API until the capacity reaches the expected state, with a configurable timeout (default: 10 minutes).
@@ -105,7 +105,7 @@ For each SF in [SF10, SF100, SF300]:
 | `run_id` | UUID | Unique execution identifier |
 | `timestamp` | datetime | Start time of the execution |
 | `endpoint` | string | One of the 4 endpoint IDs above |
-| `scale_factor` | string | `SF10`, `SF100`, `SF300` |
+| `scale_factor` | string | `SF10`, `SF100` |
 | `query_id` | string | `q01`–`q05` |
 | `cache_mode` | string | `cold` or `warm` |
 | `repetition` | int | Repetition number (1, 2, 3) |

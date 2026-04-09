@@ -1,6 +1,6 @@
 # Especificaciones del Proyecto: Benchmark TPC-DS — Lakehouse SQL Endpoint vs Fabric Warehouse
 
-**Versión**: 1.4  
+**Versión**: 1.5  
 **Autor**: Nelson López  
 **Fecha**: 2026-04-06  
 **Estado**: Revisado
@@ -19,7 +19,7 @@ El resultado del proyecto será un conjunto de métricas objetivas (latencias, f
 
 ### Dentro del alcance
 - Ejecución y medición de queries SELECT sobre dos endpoints SQL de Fabric
-- Variación de escala de datos: SF10 (~10 GB), SF100 (~100 GB), SF300 (~300 GB)
+- Variación de escala de datos: SF10 (~10 GB), SF100 (~100 GB)
 - Medición con caché fría (cold) y caché caliente (warm)
 - Varias configuraciones de tabla en el Lakehouse: sin partición, particionado por fecha, V-order
 - Generación de datos TPC-DS en formato CSV (herramienta externa, no se mide)
@@ -71,9 +71,8 @@ El aprovisionamiento se realizará mediante el script `provision/setup_fabric.py
 
 | Factor | Tamaño aproximado | Propósito |
 |-------------|-------------------|-----------|
-| SF10 | ~10 GB | Pruebas iniciales, validación de queries |
-| SF100 | ~100 GB | Pruebas de rendimiento medio |
-| SF300 | ~300 GB | Pruebas de rendimiento a escala real |
+| SF10 | ~10 GB | Pruebas iniciales y validación del runner |
+| SF100 | ~100 GB | Pruebas de rendimiento |
 
 ### Generación de datos
 - Herramienta: **dsdgen** (TPC-DS Data Generator, parte de `tpcds-kit`)
@@ -146,22 +145,22 @@ Cinco queries SQL representativas, basadas en TPC-DS y adaptadas para ser compar
 
 ```
 Endpoints:    lakehouse_default | lakehouse_partitioned | lakehouse_vorder | warehouse
-Scale factor: SF10 | SF100 | SF300
+Scale factor: SF10 | SF100
 Queries:      Q1 | Q2 | Q3 | Q4 | Q5
 Caché:        cold (1 rep) | warm (3 reps)
 ```
 
 **Total de ejecuciones**:
-- Cold: 4 endpoints × 3 SF × 5 queries × 1 rep = **60 ejecuciones**
-- Warm: 4 endpoints × 3 SF × 5 queries × 3 reps = **180 ejecuciones**
-- **Total: 240 ejecuciones** + 3 ciclos de pausa/reanudación de capacidad (uno por SF)
+- Cold: 4 endpoints × 2 SF × 5 queries × 1 rep = **40 ejecuciones**
+- Warm: 4 endpoints × 2 SF × 5 queries × 3 reps = **120 ejecuciones**
+- **Total: 160 ejecuciones** + 2 ciclos de pausa/reanudación de capacidad (uno por SF)
 
 ### Orden de ejecución por bloque de scale factor
 
-Las ejecuciones se agruparán por bloque de SF para minimizar los ciclos de pausa/reanudación (3 en total):
+Las ejecuciones se agruparán por bloque de SF para minimizar los ciclos de pausa/reanudación (2 en total):
 
 ```
-Para cada scale_factor en [SF10, SF100, SF300]:
+Para cada scale_factor en [SF10, SF100]:
   1. Reanudar capacidad → polling hasta estado Active
   2. Bloque cold: ejecutar todos los (endpoint × query) UNA vez
      → primera ejecución tras reanudación = cold real (cachés vacíos)
@@ -188,7 +187,7 @@ Por cada ejecución individual se registrará:
 | `run_id` | UUID | Identificador único de la ejecución |
 | `timestamp` | datetime | Momento de inicio de la ejecución |
 | `endpoint` | string | `lakehouse_default`, `lakehouse_partitioned`, `lakehouse_vorder`, `warehouse` |
-| `scale_factor` | string | `SF10`, `SF100`, `SF300` |
+| `scale_factor` | string | `SF10`, `SF100` |
 | `query_id` | string | `q01`–`q05` |
 | `cache_mode` | string | `cold`, `warm` |
 | `repetition` | int | Número de repetición (1, 2, 3) |
