@@ -59,18 +59,17 @@ fablab-sql-endpoint/
 
 ## Test Matrix
 
-- **Scale factors**: SF10 (~10 GB), SF100 (~100 GB)
+- **Scale factors**: SF100 only (~100 GB). SF10 (~10 GB) was used solely for ingestion validation and is not included in final results.
 - **Queries**: Q1–Q5 (see `sql/`)
 - **Cache modes**: cold (first run after capacity resume), warm (3 repetitions on hot capacity)
-- **Total executions**: 160 (cold: 40, warm: 120) + 2 capacity pause/resume cycles
+- **Total executions**: 80 (cold: 20, warm: 60) + 1 capacity pause/resume cycle
 
-### Execution Order (per Scale Factor block)
+### Execution Order
 ```
-For each SF in [SF10, SF100]:
-  1. Resume Fabric capacity → poll until Active
-  2. Cold block: run all (endpoint × query) once — true cold cache
-  3. Warm block: run all (endpoint × query) 3 times — hot cache
-  4. Pause Fabric capacity → poll until Paused
+1. Resume Fabric capacity → poll until Active
+2. Cold block: run all (endpoint × query) once — true cold cache
+3. Warm block: run all (endpoint × query) 3 times — hot cache
+4. Pause Fabric capacity → poll until Paused
 ```
 
 ---
@@ -86,7 +85,7 @@ For each SF in [SF10, SF100]:
 
 ## Key Design Decisions
 
-1. **Cold cache via capacity pause/resume** — the only reliable way to flush all in-memory caches in Fabric. Grouped by SF block (2 cycles total, not one per query).
+1. **Cold cache via capacity pause/resume** — the only reliable way to flush all in-memory caches in Fabric. 1 cycle total (SF100 only).
 2. **Secrets via environment variables only** — never hardcoded. See `.env.example`.
 3. **Configurable resource names** — workspace, lakehouse and warehouse names are all configurable via CLI args (`--workspace`, `--lh`, `--wh`) or env vars (`FABRIC_WORKSPACE_NAME`, `FABRIC_LAKEHOUSE_NAME`, `FABRIC_WAREHOUSE_NAME`).
 4. **capacity_manager.py is a standalone module** — reused by both `setup_fabric.py` and `benchmark/runner.py`. It polls the Fabric REST API until the capacity reaches the expected state, with a configurable timeout (default: 10 minutes).
@@ -95,7 +94,8 @@ For each SF in [SF10, SF100]:
 7. **Timeout per query** — configurable in `config.yaml` to prevent slow queries from blocking the suite.
 8. **pyarrow removed** — data format is native CSV from dsdgen; no Parquet conversion needed.
 9. **Schema-per-config for Lakehouse** — each of the 3 Lakehouse configs writes to its own schema within the same Lakehouse database: `benchmark_default`, `benchmark_partitioned`, `benchmark_vorder`. SQL queries have no schema prefix; the runner executes `USE {schema}` immediately after connecting for Lakehouse endpoints. The `warehouse` endpoint has no `schema` field and uses its default schema.
-10. **Explicit StructType schemas for ingestion** — all ingestion scripts define full `StructType` schemas for every TPC-DS table (never `inferSchema`). This ensures consistent column names and types across SF10 and SF100 (e.g. `LongType` for SK keys, `DecimalType(7,2)` for monetary columns). The partition column in `benchmark_partitioned` is `ss_sold_date_sk` (real column name, not positional `_c0`). Schema definitions live in `ingestion/table_configs.py`.
+10. **Explicit StructType schemas for ingestion** — all ingestion scripts define full `StructType` schemas for every TPC-DS table (never `inferSchema`). This ensures consistent column names and types (e.g. `LongType` for SK keys, `DecimalType(7,2)` for monetary columns). The partition column in `benchmark_partitioned` is `ss_sold_date_sk` (real column name, not positional `_c0`). Schema definitions live in `ingestion/table_configs.py`.
+11. **SF10 for ingestion validation only** — SF10 data was ingested to validate the pipeline (dsdgen → CSV → Delta → OPTIMIZE) and verify query execution. SF10 results are not included in the final benchmark report. The benchmark runner runs exclusively on SF100.
 
 ---
 

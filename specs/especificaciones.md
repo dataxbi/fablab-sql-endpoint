@@ -71,8 +71,10 @@ El aprovisionamiento se realizará mediante el script `provision/setup_fabric.py
 
 | Factor | Tamaño aproximado | Propósito |
 |-------------|-------------------|-----------|
-| SF10 | ~10 GB | Pruebas iniciales y validación del runner |
-| SF100 | ~100 GB | Pruebas de rendimiento |
+| SF10 | ~10 GB | Validación de la ingesta y del runner (no se incluye en los resultados finales) |
+| SF100 | ~100 GB | Benchmark de rendimiento — única escala publicada en los resultados |
+
+> **Nota**: SF10 se utilizó para probar el pipeline de ingesta (dsdgen → CSV → Delta → OPTIMIZE) y verificar que el runner ejecuta correctamente las queries. Los resultados de SF10 no forman parte del informe final de rendimiento.
 
 ### Generación de datos
 - Herramienta: **dsdgen** (TPC-DS Data Generator, parte de `tpcds-kit`)
@@ -147,36 +149,28 @@ Cinco queries SQL representativas, basadas en TPC-DS y adaptadas para ser compar
 
 ```
 Endpoints:    lakehouse_default | lakehouse_partitioned | lakehouse_vorder | warehouse
-Scale factor: SF10 | SF100
+Scale factor: SF100 (único)
 Queries:      Q1 | Q2 | Q3 | Q4 | Q5
 Caché:        cold (1 rep) | warm (3 reps)
 ```
 
+> **Nota**: SF10 se usó exclusivamente para validar la ingesta. El benchmark final corre solo con SF100.
+
 **Total de ejecuciones**:
-- Cold: 4 endpoints × 2 SF × 5 queries × 1 rep = **40 ejecuciones**
-- Warm: 4 endpoints × 2 SF × 5 queries × 3 reps = **120 ejecuciones**
-- **Total: 160 ejecuciones** + 2 ciclos de pausa/reanudación de capacidad (uno por SF)
+- Cold: 4 endpoints × 1 SF × 5 queries × 1 rep = **20 ejecuciones**
+- Warm: 4 endpoints × 1 SF × 5 queries × 3 reps = **60 ejecuciones**
+- **Total: 80 ejecuciones** + 1 ciclo de pausa/reanudación de capacidad
 
-### Orden de ejecución por bloque de scale factor
-
-Las ejecuciones se agruparán por bloque de SF para minimizar los ciclos de pausa/reanudación (2 en total):
+### Orden de ejecución
 
 ```
-Para cada scale_factor en [SF10, SF100]:
-  1. Reanudar capacidad → polling hasta estado Active
-  2. Bloque cold: ejecutar todos los (endpoint × query) UNA vez
-     → primera ejecución tras reanudación = cold real (cachés vacíos)
-  3. Bloque warm: ejecutar todos los (endpoint × query) 3 veces
-     → capacidad ya caliente, cachés precargados
-  4. Pausar capacidad → polling hasta estado Paused
-
-Al terminar el último SF: la capacidad quedará pausada (ya cubierto por el paso 4 del último bloque)
+1. Reanudar capacidad → polling hasta estado Active
+2. Bloque cold: ejecutar todos los (endpoint × query) UNA vez
+   → primera ejecución tras reanudación = cold real (cachés vacíos)
+3. Bloque warm: ejecutar todos los (endpoint × query) 3 veces
+   → capacidad ya caliente, cachés precargados
+4. Pausar capacidad → polling hasta estado Paused
 ```
-
-- **Cold** (primera ejecución tras reanudación de capacidad): garantizará cachés de memoria completamente vacíos
-- **Warm** (ejecuciones sobre capacidad caliente): misma conexión, motor ya con datos en caché
-
-> ⚠️ **Nota operativa**: las operaciones de pausa y reanudación pueden tardar entre 3 y 8 minutos. El módulo `provision/capacity_manager.py` implementa polling con reintentos hasta confirmar el estado final antes de continuar.
 
 ---
 
@@ -189,7 +183,7 @@ Por cada ejecución individual se registrará:
 | `run_id` | UUID | Identificador único de la ejecución |
 | `timestamp` | datetime | Momento de inicio de la ejecución |
 | `endpoint` | string | `lakehouse_default`, `lakehouse_partitioned`, `lakehouse_vorder`, `warehouse` |
-| `scale_factor` | string | `SF10`, `SF100` |
+| `scale_factor` | string | `SF100` (único factor de escala en el benchmark final) |
 | `query_id` | string | `q01`–`q05` |
 | `cache_mode` | string | `cold`, `warm` |
 | `repetition` | int | Número de repetición (1, 2, 3) |
