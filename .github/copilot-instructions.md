@@ -95,6 +95,7 @@ For each SF in [SF10, SF100]:
 7. **Timeout per query** — configurable in `config.yaml` to prevent slow queries from blocking the suite.
 8. **pyarrow removed** — data format is native CSV from dsdgen; no Parquet conversion needed.
 9. **Schema-per-config for Lakehouse** — each of the 3 Lakehouse configs writes to its own schema within the same Lakehouse database: `benchmark_default`, `benchmark_partitioned`, `benchmark_vorder`. SQL queries have no schema prefix; the runner executes `USE {schema}` immediately after connecting for Lakehouse endpoints. The `warehouse` endpoint has no `schema` field and uses its default schema.
+10. **Explicit StructType schemas for ingestion** — all ingestion scripts define full `StructType` schemas for every TPC-DS table (never `inferSchema`). This ensures consistent column names and types across SF10 and SF100 (e.g. `LongType` for SK keys, `DecimalType(7,2)` for monetary columns). The partition column in `benchmark_partitioned` is `ss_sold_date_sk` (real column name, not positional `_c0`). Schema definitions live in `ingestion/table_configs.py`.
 
 ---
 

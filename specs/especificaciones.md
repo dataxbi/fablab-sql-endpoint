@@ -1,8 +1,8 @@
 # Especificaciones del Proyecto: Benchmark TPC-DS — Lakehouse SQL Endpoint vs Fabric Warehouse
 
-**Versión**: 1.5  
+**Versión**: 1.6  
 **Autor**: Nelson López  
-**Fecha**: 2026-04-06  
+**Fecha**: 2026-04-10  
 **Estado**: Revisado
 
 ---
@@ -94,7 +94,9 @@ Se probará el mismo conjunto de queries sobre tres configuraciones de las tabla
 
 > **Nota sobre OPTIMIZE**: tras la ingesta de cada configuración se ejecuta `OPTIMIZE` (sin ZORDER) en todas las tablas para compactar ficheros Parquet pequeños generados por Spark. Esto no constituye una configuración de benchmark en sí misma, sino una práctica estándar de mantenimiento Delta. El ZORDER fue descartado por su coste desproporcionado a partir de SF100 (decenas de horas a SF1000 incluso en F128).
 
-> **Nota sobre schemas**: cada configuración de Lakehouse se escribe en un schema independiente dentro del mismo Lakehouse: `benchmark_default`, `benchmark_partitioned` y `benchmark_vorder`. Las queries SQL no incluyen prefijo de schema; el runner establece el schema de trabajo con `USE {schema}` inmediatamente después de conectar, antes de ejecutar cada query.
+> **Nota sobre schemas de Lakehouse**: cada configuración se escribe en un schema independiente dentro del mismo Lakehouse: `benchmark_default`, `benchmark_partitioned` y `benchmark_vorder`. Las queries SQL no incluyen prefijo de schema; el runner establece el schema de trabajo con `USE {schema}` inmediatamente después de conectar, antes de ejecutar cada query.
+
+> **Nota sobre schemas de ingesta (StructType)**: los notebooks/scripts de ingesta utilizan **schemas explícitos** (`StructType`) para cada tabla TPC-DS — nunca `inferSchema`. Esto garantiza tipos consistentes (e.g. `LongType` para claves SK, `DecimalType(7,2)` para importes) independientemente del scale factor. La columna de partición en `benchmark_partitioned` es `ss_sold_date_sk` (nombre real de columna según el schema explícito). Las definiciones completas están en `ingestion/table_configs.py`.
 
 El Warehouse **no tendrá configuraciones variables** — se probará con la configuración estándar.
 
