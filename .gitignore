@@ -30,8 +30,8 @@ ENV/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# Benchmark results (generated output)
-results/
+# Benchmark results — committed intentionally (small files, primary artifact)
+# results/
 
 # TPC-DS generated data
 data/
