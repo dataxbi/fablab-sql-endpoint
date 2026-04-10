@@ -124,6 +124,16 @@ def run_benchmark(config: dict, scale_factors: list[str], dry_run: bool) -> list
         logger.info("=" * 60)
 
         if not dry_run:
+            # Pause first to flush all in-memory caches, then resume.
+            # This guarantees a true cold start even if the capacity was already Active.
+            # pause_capacity() is a no-op if already Paused.
+            logger.info("Pausing Fabric capacity to flush caches for cold block (%s)...", sf)
+            pause_capacity(
+                subscription_id=os.path.expandvars(cap_cfg["subscription_id"]),
+                resource_group=os.path.expandvars(cap_cfg["resource_group"]),
+                capacity_name=os.path.expandvars(cap_cfg["capacity_name"]),
+                timeout_sec=cap_cfg.get("pause_timeout_sec", 600),
+            )
             logger.info("Resuming Fabric capacity for %s block...", sf)
             resume_capacity(
                 subscription_id=os.path.expandvars(cap_cfg["subscription_id"]),
