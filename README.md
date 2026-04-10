@@ -29,7 +29,7 @@ fablab-sql-endpoint/
 ├── sql/                ← Five benchmark SQL queries (q01–q05)
 ├── benchmark/          ← Main runner, config, connection and utilities
 ├── analysis/           ← Results analysis notebook (charts + statistics)
-├── results/            ← Output CSV/JSON files (git-ignored)
+├── results/            ← Output CSV/JSON files (committed to repo)
 ├── specs/              ← Authoritative project specification (Spanish)
 ├── .env.example        ← Environment variable template
 └── requirements.txt
@@ -45,6 +45,7 @@ fablab-sql-endpoint/
 | [`data_generation/`](data_generation/README.md) | ✅ | Generate TPC-DS CSVs with dsdgen; split, gzip and upload to OneLake |
 | [`ingestion/`](ingestion/README.md) | ✅ | Load CSVs into 3 Lakehouse schemas and the Warehouse via Spark |
 | [`benchmark/`](benchmark/README.md) | ✅ | Run the benchmark; config reference; output format |
+| [`results/`](results/) | — | Output CSV/JSON files — committed to the repo |
 
 ---
 
@@ -84,5 +85,11 @@ Copy `.env.example` to `.env` and fill in the values printed by `provision/setup
 
 ## Results
 
-The benchmark produces `results/benchmark_<timestamp>.csv` and `.json`.
-Open `analysis/analyze_results.ipynb` to generate comparison charts.
+Benchmark output files are committed to [`results/`](results/):
+
+| File | Scale | Description |
+|------|-------|-------------|
+| `benchmark_20260410T160604.csv` | SF100 | Raw results — all 4 endpoints, Q1–Q5, cold + warm |
+| `benchmark_20260410T160604.json` | SF100 | Same data in JSON format |
+
+Open `analysis/analyze_results.ipynb` to generate comparison charts from any results file.
