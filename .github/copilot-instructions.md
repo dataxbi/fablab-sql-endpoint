@@ -21,8 +21,8 @@ fablab-sql-endpoint/
 │   └── generate_csv.py               ← dsdgen wrapper, outputs native CSV
 ├── ingestion/
 │   ├── 01_lakehouse_ingest.ipynb     ← Spark: CSV → Delta (3 configs)
-│   ├── 02_warehouse_ingest.ipynb     ← Spark/SQL: CSV → Warehouse
-│   └── table_configs.py              ← Delta table config definitions
+│   ├── 02_warehouse_ingest.sql       ← T-SQL CTAS cross-DB: LH_01 → WH_01
+│   └── table_configs.py              ← Delta table config definitions + StructType schemas
 ├── sql/
 │   ├── q01_simple_agg.sql            ← TPC-DS Q29 style
 │   ├── q02_large_join.sql            ← TPC-DS Q19 style
@@ -96,6 +96,7 @@ fablab-sql-endpoint/
 9. **Schema-per-config for Lakehouse** — each of the 3 Lakehouse configs writes to its own schema within the same Lakehouse database: `benchmark_default`, `benchmark_partitioned`, `benchmark_vorder`. SQL queries have no schema prefix; the runner executes `USE {schema}` immediately after connecting for Lakehouse endpoints. The `warehouse` endpoint has no `schema` field and uses its default schema.
 10. **Explicit StructType schemas for ingestion** — all ingestion scripts define full `StructType` schemas for every TPC-DS table (never `inferSchema`). This ensures consistent column names and types (e.g. `LongType` for SK keys, `DecimalType(7,2)` for monetary columns). The partition column in `benchmark_partitioned` is `ss_sold_date_sk` (real column name, not positional `_c0`). Schema definitions live in `ingestion/table_configs.py`.
 11. **SF10 for ingestion validation only** — SF10 data was ingested to validate the pipeline (dsdgen → CSV → Delta → OPTIMIZE) and verify query execution. SF10 results are not included in the final benchmark report. The benchmark runner runs exclusively on SF100.
+12. **Warehouse ingestion via T-SQL CTAS cross-database** — the `com.microsoft.fabric.spark.write` Spark connector is only available inside native Fabric notebooks, not in external Livy sessions. Warehouse tables are populated using `CREATE TABLE benchmark.<table> AS SELECT * FROM [LH_01].[benchmark_default].<table>` executed via `sqlcmd` against the WH_01 SQL endpoint. This leverages Fabric's native cross-database query capability (same workspace, 3-part naming). Script: `ingestion/02_warehouse_ingest.sql`.
 
 ---
 

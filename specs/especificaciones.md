@@ -1,6 +1,6 @@
 # Especificaciones del Proyecto: Benchmark TPC-DS — Lakehouse SQL Endpoint vs Fabric Warehouse
 
-**Versión**: 1.6  
+**Versión**: 1.8  
 **Autor**: Nelson López  
 **Fecha**: 2026-04-10  
 **Estado**: Revisado
@@ -99,6 +99,8 @@ Se probará el mismo conjunto de queries sobre tres configuraciones de las tabla
 > **Nota sobre schemas de Lakehouse**: cada configuración se escribe en un schema independiente dentro del mismo Lakehouse: `benchmark_default`, `benchmark_partitioned` y `benchmark_vorder`. Las queries SQL no incluyen prefijo de schema; el runner establece el schema de trabajo con `USE {schema}` inmediatamente después de conectar, antes de ejecutar cada query.
 
 > **Nota sobre schemas de ingesta (StructType)**: los notebooks/scripts de ingesta utilizan **schemas explícitos** (`StructType`) para cada tabla TPC-DS — nunca `inferSchema`. Esto garantiza tipos consistentes (e.g. `LongType` para claves SK, `DecimalType(7,2)` para importes) independientemente del scale factor. La columna de partición en `benchmark_partitioned` es `ss_sold_date_sk` (nombre real de columna según el schema explícito). Las definiciones completas están en `ingestion/table_configs.py`.
+
+ > **Nota sobre ingesta en el Warehouse**: las tablas del Warehouse se poblan mediante **CTAS cross-database** (`CREATE TABLE benchmark.<tabla> AS SELECT * FROM [LH_01].[benchmark_default].<tabla>`), ejecutado vía `sqlcmd` directamente contra el SQL endpoint de WH_01. Este enfoque aprovecha la capacidad de consulta cross-database de Fabric (mismo workspace) y es más sencillo y fiable que el conector Spark `com.microsoft.fabric.spark.write`, que solo funciona en notebooks nativos de Fabric y no está disponible en sesiones Livy externas. El script T-SQL está en `ingestion/02_warehouse_ingest.sql`.
 
 El Warehouse **no tendrá configuraciones variables** — se probará con la configuración estándar.
 
@@ -211,9 +213,9 @@ fablab-sql-endpoint/
 │   ├── generate_csv.py            # dsdgen wrapper → CSV
 │   └── README.md
 ├── ingestion/
-│   ├── 01_lakehouse_ingest.ipynb  # Spark: CSV → Delta (Lakehouse)
-│   ├── 02_warehouse_ingest.ipynb  # Spark/SQL: CSV → Warehouse
-│   └── table_configs.py           # Configuraciones de tabla
+│   ├── 01_lakehouse_ingest.ipynb  # Spark: CSV → Delta (Lakehouse, 3 configs)
+│   ├── 02_warehouse_ingest.sql    # T-SQL CTAS cross-DB: LH_01 → WH_01
+│   └── table_configs.py           # Configuraciones de tabla y schemas StructType
 ├── sql/
 │   ├── q01_simple_agg.sql
 │   ├── q02_large_join.sql
