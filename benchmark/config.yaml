@@ -33,6 +33,7 @@ endpoints:
   warehouse:
     server: "${WAREHOUSE_SERVER}"
     database: "${WAREHOUSE_DATABASE}"
+    schema: "benchmark"
     description: "Fabric Warehouse — standard configuration"
 
 # Scale factors to test (must match ingested data)

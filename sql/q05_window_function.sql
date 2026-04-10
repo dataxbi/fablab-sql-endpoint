@@ -14,9 +14,9 @@ WITH customer_spend AS (
         c.c_last_name,
         c.c_birth_country,
         SUM(ss.ss_net_paid) AS total_spend
-    FROM store_sales ss
-    JOIN customer    c  ON ss.ss_customer_sk     = c.c_customer_sk
-    JOIN date_dim    d  ON ss.ss_sold_date_sk    = d.d_date_sk
+    FROM _S_.store_sales ss
+    JOIN _S_.customer    c  ON ss.ss_customer_sk     = c.c_customer_sk
+    JOIN _S_.date_dim    d  ON ss.ss_sold_date_sk    = d.d_date_sk
     WHERE d.d_year BETWEEN 2000 AND 2002
     GROUP BY
         c.c_customer_sk,
@@ -42,4 +42,4 @@ SELECT
 FROM customer_spend
 ORDER BY
     overall_rank
-LIMIT 200;
+OFFSET 0 ROWS FETCH NEXT 200 ROWS ONLY;

@@ -71,11 +71,11 @@ def run_query(
     database = os.path.expandvars(endpoint_cfg["database"])
     schema = endpoint_cfg.get("schema")
 
+    sql_exec = sql.replace("_S_", f"[{schema}]") if schema else sql
+
     with get_connection(server, database) as conn:
-        if schema:
-            conn.execute(f"USE [{schema}]")
         with Timer() as t:
-            rows, status = _execute_query(conn, sql, timeout_sec)
+            rows, status = _execute_query(conn, sql_exec, timeout_sec)
 
     error_msg = status if status not in ("success", "timeout") else ""
     final_status = "error" if error_msg else status

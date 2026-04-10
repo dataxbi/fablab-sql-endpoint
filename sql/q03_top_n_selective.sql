@@ -13,9 +13,9 @@ SELECT
     SUM(ss.ss_ext_sales_price)   AS revenue,
     SUM(ss.ss_net_paid)          AS net_paid,
     COUNT(*)                     AS num_transactions
-FROM store_sales ss
-JOIN date_dim    d ON ss.ss_sold_date_sk = d.d_date_sk
-JOIN item        i ON ss.ss_item_sk      = i.i_item_sk
+FROM _S_.store_sales ss
+JOIN _S_.date_dim    d ON ss.ss_sold_date_sk = d.d_date_sk
+JOIN _S_.item        i ON ss.ss_item_sk      = i.i_item_sk
 WHERE i.i_category = 'Electronics'
   AND d.d_year = 2001
   AND d.d_qoy  = 4
@@ -26,4 +26,4 @@ GROUP BY
     i.i_class
 ORDER BY
     revenue DESC
-LIMIT 10;
+OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY;

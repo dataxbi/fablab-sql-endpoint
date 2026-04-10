@@ -10,9 +10,9 @@ WITH promo_sales AS (
     SELECT
         ss.ss_item_sk,
         SUM(ss.ss_ext_sales_price) AS promo_revenue
-    FROM store_sales ss
-    JOIN date_dim    d ON ss.ss_sold_date_sk = d.d_date_sk
-    JOIN promotion   p ON ss.ss_promo_sk     = p.p_promo_sk
+    FROM _S_.store_sales ss
+    JOIN _S_.date_dim    d ON ss.ss_sold_date_sk = d.d_date_sk
+    JOIN _S_.promotion   p ON ss.ss_promo_sk     = p.p_promo_sk
     WHERE d.d_year = 2002
       AND d.d_qoy  = 2
       AND p.p_channel_tv = 'Y'
@@ -22,8 +22,8 @@ total_sales AS (
     SELECT
         ss.ss_item_sk,
         SUM(ss.ss_ext_sales_price) AS total_revenue
-    FROM store_sales ss
-    JOIN date_dim    d ON ss.ss_sold_date_sk = d.d_date_sk
+    FROM _S_.store_sales ss
+    JOIN _S_.date_dim    d ON ss.ss_sold_date_sk = d.d_date_sk
     WHERE d.d_year = 2002
       AND d.d_qoy  = 2
     GROUP BY ss.ss_item_sk
@@ -41,12 +41,12 @@ SELECT
     )                               AS promo_pct
 FROM promo_sales   ps
 JOIN total_sales   ts ON ps.ss_item_sk = ts.ss_item_sk
-JOIN item           i ON ps.ss_item_sk = i.i_item_sk
-JOIN customer_demographics cd
+JOIN _S_.item           i ON ps.ss_item_sk = i.i_item_sk
+JOIN _S_.customer_demographics cd
     ON EXISTS (
         SELECT 1
-        FROM store_sales ss2
-        JOIN household_demographics hd ON ss2.ss_hdemo_sk = hd.hd_demo_sk
+        FROM _S_.store_sales ss2
+        JOIN _S_.household_demographics hd ON ss2.ss_hdemo_sk = hd.hd_demo_sk
         WHERE ss2.ss_item_sk = ps.ss_item_sk
           AND cd.cd_gender   = 'F'
           AND hd.hd_vehicle_count > 0
@@ -55,4 +55,4 @@ WHERE ts.total_revenue > 0
 ORDER BY
     promo_pct DESC,
     i.i_item_id
-LIMIT 50;
+OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY;

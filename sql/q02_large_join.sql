@@ -15,11 +15,11 @@ SELECT
     COUNT(*)                        AS num_sales,
     SUM(ss.ss_ext_sales_price)      AS total_ext_sales_price,
     SUM(ss.ss_net_paid)             AS total_net_paid
-FROM store_sales          ss
-JOIN date_dim             d  ON ss.ss_sold_date_sk    = d.d_date_sk
-JOIN item                 i  ON ss.ss_item_sk         = i.i_item_sk
-JOIN store                s  ON ss.ss_store_sk        = s.s_store_sk
-JOIN customer             c  ON ss.ss_customer_sk     = c.c_customer_sk
+FROM _S_.store_sales          ss
+JOIN _S_.date_dim             d  ON ss.ss_sold_date_sk    = d.d_date_sk
+JOIN _S_.item                 i  ON ss.ss_item_sk         = i.i_item_sk
+JOIN _S_.store                s  ON ss.ss_store_sk        = s.s_store_sk
+JOIN _S_.customer             c  ON ss.ss_customer_sk     = c.c_customer_sk
 WHERE d.d_year = 2002
   AND i.i_category IN ('Books', 'Electronics', 'Sports')
 GROUP BY
@@ -32,4 +32,4 @@ GROUP BY
 ORDER BY
     total_net_paid DESC,
     i.i_brand
-LIMIT 100;
+OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY;
