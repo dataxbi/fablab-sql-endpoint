@@ -1,36 +1,37 @@
 # provision/
 
-Scripts de aprovisionamiento inicial de los recursos Fabric necesarios para el benchmark.
+One-time provisioning scripts for the Fabric resources required by the benchmark.
 
-## Ficheros
+## Files
 
-| Fichero | Rol |
-|---------|-----|
-| `setup_fabric.py` | Script de ejecución única: crea workspace, Lakehouse y Warehouse vía API |
-| `capacity_manager.py` | Módulo reutilizable: pausa/reanuda la capacidad Fabric con polling |
+| File | Role |
+|------|------|
+| `setup_fabric.py` | One-time script: creates the workspace, Lakehouse and Warehouse via the Fabric API |
+| `capacity_manager.py` | Reusable module: pauses/resumes the Fabric capacity with polling |
 
 ---
 
 ## setup_fabric.py
 
-Crea (o verifica que existan) los tres recursos Fabric necesarios e imprime los strings de conexión SQL para copiarlos al `.env`.
+Creates (or verifies the existence of) the three required Fabric resources and prints the SQL
+connection strings so you can copy them into your `.env` file.
 
-**Cuándo usarlo:** una sola vez al inicio del proyecto, o si se repite el experimento desde cero en un entorno nuevo.
+**When to run:** once at project setup, or when recreating the environment from scratch.
 
 ```bash
 py provision/setup_fabric.py [--workspace NAME] [--lh NAME] [--wh NAME] [--capacity-id ID]
 ```
 
-### Argumentos
+### Arguments
 
-| Argumento | Variable de entorno | Default |
-|-----------|---------------------|---------|
+| Argument | Environment variable | Default |
+|----------|----------------------|---------|
 | `--workspace` | `FABRIC_WORKSPACE_NAME` | `FabLab_SQL_Endpoint` |
 | `--lh` | `FABRIC_LAKEHOUSE_NAME` | `LH_01` |
 | `--wh` | `FABRIC_WAREHOUSE_NAME` | `WH_01` |
-| `--capacity-id` | `FABRIC_CAPACITY_ID` | *(opcional)* |
+| `--capacity-id` | `FABRIC_CAPACITY_ID` | *(optional)* |
 
-### Ejemplo de salida
+### Example output
 
 ```
 ============================================================
@@ -49,32 +50,36 @@ Warehouse     : WH_01  (id: ...)
 Copy the values above into your .env file.
 ```
 
-> El script es idempotente: si los recursos ya existen, los detecta y no los duplica.
+> The script is idempotent: if a resource already exists it is detected and not recreated.
 
 ---
 
 ## capacity_manager.py
 
-Módulo de librería — **no se ejecuta directamente**. Expone dos funciones que usa `benchmark/runner.py` durante la ejecución del benchmark:
+Library module — **not meant to be run directly**. It exposes the functions used by
+`benchmark/runner.py` during benchmark execution:
 
-| Función | Descripción |
-|---------|-------------|
-| `resume_capacity(...)` | Reanuda la capacidad y espera hasta estado `Active` |
-| `pause_capacity(...)` | Pausa la capacidad y espera hasta estado `Paused` |
-| `get_capacity_state(...)` | Consulta el estado actual de la capacidad |
+| Function | Description |
+|----------|-------------|
+| `resume_capacity(...)` | Resumes the capacity and blocks until state is `Active` |
+| `pause_capacity(...)` | Pauses the capacity and blocks until state is `Paused` |
+| `get_capacity_state(...)` | Returns the current state of the capacity |
 
-Ambas funciones son bloqueantes: hacen polling cada 15 s hasta alcanzar el estado esperado o agotar el timeout (por defecto 10 minutos).
+Both functions poll every 15 s until the expected state is reached or the timeout expires
+(default: 10 minutes).
 
-### Por qué es necesario
+### Why this is needed
 
-La única forma fiable de vaciar todas las cachés en memoria de Fabric (para mediciones *cold*) es pausar y reanudar la capacidad. El runner llama a estas funciones al inicio de cada bloque de escala (`SF10`, `SF100`).
+Pausing and resuming the Fabric capacity is the only reliable way to flush all in-memory
+caches for *cold* cache measurements. The runner calls these functions at the start of each
+scale-factor block (`SF10`, `SF100`).
 
 ---
 
-## Prerrequisitos
+## Prerequisites
 
 ```bash
-az login   # autenticación vía Azure CLI (sin service principals)
+az login   # Azure CLI authentication — no service principals or secrets required
 ```
 
-Las credenciales se leen del entorno — ver `.env.example` en la raíz del repositorio.
+Credentials are read from the environment — see `.env.example` at the repository root.
