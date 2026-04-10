@@ -159,3 +159,118 @@ data/
 > Generated files can be several hundred GB for SF100 and SF1000.
 > After generating, upload the CSV files to the Lakehouse Files section
 > (`Files/tpcds/sfXX/`) before running the ingestion notebooks.
+
+---
+
+## Uploading to OneLake
+
+After generation, the CSV files must be uploaded to the Lakehouse `Files` section
+(`Files/tpcds/sfXX/`) before running the ingestion notebooks.
+
+### Why split and compress?
+
+`azcopy` times out with HTTP 500 (`OperationTimedOut`) on files larger than ~1 GB when
+uploading to OneLake. The solution is to split large tables into smaller chunks and
+compress them with gzip before uploading.
+
+**Tables that require splitting** (SF100 sizes):
+
+| Table | Raw size |
+|-------|----------|
+| `store_sales` | ~38 GB |
+| `catalog_sales` | ~29 GB |
+| `web_sales` | ~15 GB |
+| `inventory` | ~26 GB |
+
+All other tables are small enough to upload directly as-is.
+
+### Step 1 — Split large CSVs (in WSL)
+
+Write this script to your WSL home directory and run it:
+
+```bash
+# Write to ~/split_csv.sh
+cat > ~/split_csv.sh << 'EOF'
+#!/bin/bash
+OUT_DIR=~/tpcds-data/sf100/split
+SRC_DIR=~/tpcds-data/sf100
+mkdir -p "$OUT_DIR"
+for TABLE in store_sales catalog_sales web_sales inventory; do
+    mkdir -p "$OUT_DIR/$TABLE"
+    split -l 2000000 --additional-suffix=.csv "$SRC_DIR/${TABLE}.csv" "$OUT_DIR/$TABLE/part_"
+    echo "Split $TABLE done"
+done
+EOF
+bash ~/split_csv.sh
+```
+
+Each chunk will have ~2 million rows (~100–200 MB uncompressed).
+
+### Step 2 — Gzip the chunks (in WSL)
+
+```bash
+cat > ~/gzip_csv.sh << 'EOF'
+#!/bin/bash
+OUT_DIR=~/tpcds-data/sf100/split
+for TABLE in store_sales catalog_sales web_sales inventory; do
+    find "$OUT_DIR/$TABLE" -name "*.csv" | xargs -P4 gzip
+    echo "Gzip $TABLE done"
+done
+EOF
+bash ~/gzip_csv.sh
+```
+
+`-P4` runs 4 parallel gzip processes. Each `.csv` becomes a `.csv.gz` (~100 MB).
+
+### Step 3 — Upload to OneLake with azcopy
+
+```powershell
+# Required: tell azcopy to use Azure CLI credentials
+$env:AZCOPY_AUTO_LOGIN_TYPE = "AZCLI"
+
+$WORKSPACE_ID = "<your-workspace-id>"
+$LAKEHOUSE_ID = "<your-lakehouse-id>"
+$ONELAKE_URL  = "https://onelake.blob.fabric.microsoft.com/$WORKSPACE_ID/$LAKEHOUSE_ID/Files/tpcds"
+
+# Upload small tables (direct CSV, no split needed)
+azcopy copy `
+  "\\wsl$\Ubuntu-24.04\home\<user>\tpcds-data\sf100\*.csv" `
+  "$ONELAKE_URL/sf100/" `
+  --recursive `
+  --trusted-microsoft-suffixes="*.fabric.microsoft.com"
+
+# Upload split+gzip chunks
+azcopy copy `
+  "\\wsl$\Ubuntu-24.04\home\<user>\tpcds-data\sf100\split" `
+  "$ONELAKE_URL/sf100/" `
+  --recursive `
+  --trusted-microsoft-suffixes="*.fabric.microsoft.com"
+```
+
+This creates the following structure in OneLake:
+
+```
+Files/tpcds/sf100/
+├── date_dim.csv
+├── store.csv
+├── item.csv
+├── ... (20 small tables as plain CSV)
+└── split/
+    ├── store_sales/
+    │   ├── part_aa.csv.gz
+    │   ├── part_ab.csv.gz
+    │   └── ...
+    ├── catalog_sales/
+    ├── web_sales/
+    └── inventory/
+```
+
+### How the ingestion notebook reads the files
+
+`ingestion/01_lakehouse_ingest.ipynb` handles both layouts transparently:
+
+- **Small tables**: `spark.read.csv("Files/tpcds/sf100/{table}.csv")`
+- **Large tables**: `spark.read.csv("Files/tpcds/sf100/split/{table}/*.csv.gz")`
+
+The set of large tables is defined in the `SPLIT_TABLES` constant at the top of the
+notebook's setup cell.
