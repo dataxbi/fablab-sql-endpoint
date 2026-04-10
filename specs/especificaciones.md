@@ -230,7 +230,7 @@ fablab-sql-endpoint/
 │   ├── config.yaml                # Matriz de pruebas
 │   ├── connection.py              # Gestión de conexiones pyodbc
 │   └── utils.py                  # Timer, logging, serialización
-├── results/                       # Salida CSV/JSON (excluida de git)
+├── results/                       # Salida CSV/JSON (incluida en el repositorio)
 ├── analysis/
 │   └── analyze_results.ipynb      # Análisis comparativo
 ├── .env.example                   # Plantilla de variables de entorno
@@ -248,11 +248,9 @@ fablab-sql-endpoint/
 | `pandas` | Procesamiento de resultados y análisis en notebooks |
 | `pyyaml` | Lectura de `config.yaml` |
 | `python-dotenv` | Carga de variables de entorno desde `.env` |
-| `azure-identity` | Autenticación con Fabric REST API |
-| `requests` | Llamadas a Fabric REST API (aprovisionamiento y gestión de capacidad) |
 | `matplotlib` / `seaborn` | Visualización en el notebook de análisis |
 | dsdgen (externo) | Generación de datos TPC-DS en formato CSV |
-| Azure CLI (`az`) | Autenticación y aprovisionamiento Fabric |
+| Azure CLI (`az`) | Autenticación y aprovisionamiento Fabric (toda la comunicación REST se hace via `az rest`) |
 
 ---
 

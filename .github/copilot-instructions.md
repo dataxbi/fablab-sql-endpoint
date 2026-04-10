@@ -34,7 +34,7 @@ fablab-sql-endpoint/
 │   ├── config.yaml                   ← test matrix definition
 │   ├── connection.py                 ← pyodbc connection management
 │   └── utils.py                      ← timer, logging, result serialization
-├── results/                          ← CSV/JSON output (git-ignored)
+├── results/                          ← CSV/JSON output (committed to repo)
 ├── analysis/
 │   └── analyze_results.ipynb         ← comparison charts and statistics
 ├── .env.example                      ← environment variable template
