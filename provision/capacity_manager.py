@@ -7,6 +7,7 @@ Used by setup_fabric.py and benchmark/runner.py.
 
 import subprocess
 import json
+import sys
 import time
 import logging
 from enum import Enum
@@ -27,10 +28,13 @@ class CapacityState(str, Enum):
     SCALING = "Scaling"
     FAILED = "Failed"
 
+# On Windows, az is a batch script (.cmd) and must be invoked explicitly
+_AZ_CMD = "az.cmd" if sys.platform == "win32" else "az"
+
 
 def _az_rest(method: str, url: str, body: dict | None = None) -> dict:
     """Execute an az rest call and return the parsed JSON response."""
-    cmd = ["az", "rest", "--method", method, "--url", url]
+    cmd = [_AZ_CMD, "rest", "--method", method, "--url", url]
     if body:
         cmd += ["--body", json.dumps(body)]
     result = subprocess.run(cmd, capture_output=True, text=True)
