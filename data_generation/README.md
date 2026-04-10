@@ -167,6 +167,22 @@ data/
 After generation, the CSV files must be uploaded to the Lakehouse `Files` section
 (`Files/tpcds/sfXX/`) before running the ingestion notebooks.
 
+The upload process (split → gzip → azcopy) is automated by `upload_to_onelake.py`:
+
+```powershell
+py data_generation/upload_to_onelake.py `
+    --sf 100 `
+    --src "\\wsl$\Ubuntu-24.04\home\<user>\tpcds-data" `
+    --workspace-id <workspace-guid> `
+    --lakehouse-id <lakehouse-guid>
+```
+
+Or set `FABRIC_WORKSPACE_ID` / `FABRIC_LAKEHOUSE_ID` in `.env` and omit those flags.
+Use `--skip-split` to re-upload without re-splitting, or `--skip-upload` to test the
+split/gzip steps without uploading.
+
+The sections below document what the script does in each step.
+
 ### Why split and compress?
 
 `azcopy` times out with HTTP 500 (`OperationTimedOut`) on files larger than ~1 GB when
