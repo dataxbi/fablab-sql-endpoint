@@ -36,8 +36,8 @@ endpoints:
     description: "Fabric Warehouse — standard configuration"
 
 # Scale factors to test (must match ingested data)
+# SF10 was used only for ingestion validation; the benchmark runs exclusively on SF100.
 scale_factors:
-  - SF10
   - SF100
 
 # SQL query files (relative to project root)
