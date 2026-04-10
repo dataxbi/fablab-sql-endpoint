@@ -127,7 +127,10 @@ Results are written to `results/benchmark_{timestamp}.csv` and `results/benchmar
 | `FABRIC_WORKSPACE_NAME` | `FabLab_SQL_Endpoint` | Fabric workspace name |
 | `FABRIC_LAKEHOUSE_NAME` | `LH_01` | Lakehouse item name |
 | `FABRIC_WAREHOUSE_NAME` | `WH_01` | Warehouse item name |
-| `FABRIC_CAPACITY_ID` | — | Fabric capacity ID (required for pause/resume) |
+| `FABRIC_CAPACITY_ID` | — | Fabric capacity GUID (get via `az rest` against Fabric API) |
+| `FABRIC_CAPACITY_NAME` | — | ARM capacity name (for suspend/resume) |
+| `AZURE_SUBSCRIPTION_ID` | — | Azure subscription ID |
+| `AZURE_RESOURCE_GROUP` | — | Resource group containing the capacity |
 | `LAKEHOUSE_SERVER` | — | Lakehouse SQL endpoint FQDN |
 | `LAKEHOUSE_DATABASE` | — | Lakehouse database name |
 | `WAREHOUSE_SERVER` | — | Warehouse SQL endpoint FQDN |

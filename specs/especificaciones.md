@@ -43,6 +43,7 @@ El resultado del proyecto será un conjunto de métricas objetivas (latencias, f
 | Workspace | `FabLab_SQL_Endpoint` (configurable) | Fabric Workspace |
 | Lakehouse | `LH_01` (con esquema) (configurable) | Fabric Lakehouse |
 | Warehouse | `WH_01` (configurable) | Fabric Warehouse |
+| Capacidad | `fablab` — F64, West Europe | Fabric Capacity |
 
 El nombre del workspace será configurable mediante el argumento `--workspace` o la variable de entorno `FABRIC_WORKSPACE_NAME`.
 El nombre del Lakehouse será configurable mediante el argumento `--lh` o la variable de entorno `FABRIC_LAKEHOUSE_NAME`.
@@ -277,7 +278,10 @@ Todas las configuraciones sensibles se gestionan mediante variables de entorno (
 | `FABRIC_WORKSPACE_NAME` | Nombre del workspace en Fabric | `FabLab_SQL_Endpoint` |
 | `FABRIC_LAKEHOUSE_NAME` | Nombre del Lakehouse en Fabric | `LH_01` |
 | `FABRIC_WAREHOUSE_NAME` | Nombre del Warehouse en Fabric | `WH_01` |
-| `FABRIC_CAPACITY_ID` | ID de la capacidad Fabric F/P SKU | — |
+| `FABRIC_CAPACITY_ID` | GUID de la capacidad Fabric (para pause/resume) | — |
+| `FABRIC_CAPACITY_NAME` | Nombre ARM de la capacidad | — |
+| `AZURE_SUBSCRIPTION_ID` | ID de la suscripción Azure | — |
+| `AZURE_RESOURCE_GROUP` | Grupo de recursos de la capacidad | — |
 | `LAKEHOUSE_SERVER` | FQDN del SQL endpoint del Lakehouse | — |
 | `LAKEHOUSE_DATABASE` | Nombre de la base de datos del Lakehouse | — |
 | `WAREHOUSE_SERVER` | FQDN del SQL endpoint del Warehouse | — |
