@@ -36,6 +36,18 @@ endpoints:
     schema: "benchmark"
     description: "Fabric Warehouse — standard configuration"
 
+  warehouse_frag:
+    server: "${WAREHOUSE_SERVER}"
+    database: "${WAREHOUSE_DATABASE}"
+    schema: "benchmark_frag"
+    description: "Fabric Warehouse — fragmented store_sales (~28.8K files of 10K rows via OFFSET/FETCH inserts)"
+
+  lakehouse_frag:
+    server: "${LAKEHOUSE_SERVER}"
+    database: "${LAKEHOUSE_DATABASE}"
+    schema: "benchmark_frag"
+    description: "Lakehouse — fragmented store_sales (~288K files of 1K rows via maxRecordsPerFile=1000)"
+
 # Scale factors to test (must match ingested data)
 # SF10 was used only for ingestion validation; the benchmark runs exclusively on SF100.
 scale_factors:

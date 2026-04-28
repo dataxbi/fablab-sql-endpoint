@@ -48,3 +48,7 @@ Thumbs.db
 
 # Azure CLI cache
 .azure/
+
+# Fragmentation experiment — WH insert checkpoint (runtime state, not source)
+fragmentation/.wh_insert_checkpoint.json
+fragmentation/.wh_insert_checkpoint.tmp

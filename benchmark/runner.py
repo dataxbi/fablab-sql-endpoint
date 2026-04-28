@@ -9,7 +9,8 @@ Execution order per scale-factor block:
   4. Pause Fabric capacity   → poll until Paused
 
 Usage:
-    py benchmark/runner.py [--config benchmark/config.yaml] [--sf SF10 SF100] [--dry-run]
+    py benchmark/runner.py [--config benchmark/config.yaml] [--sf SF10 SF100]
+                           [--endpoints warehouse_frag lakehouse_frag] [--dry-run]
 """
 
 import argparse
@@ -103,9 +104,22 @@ def run_query(
 # Main benchmark loop
 # ---------------------------------------------------------------------------
 
-def run_benchmark(config: dict, scale_factors: list[str], dry_run: bool) -> list[RunResult]:
+def run_benchmark(
+    config: dict,
+    scale_factors: list[str],
+    dry_run: bool,
+    endpoints_filter: list[str] | None = None,
+) -> list[RunResult]:
     cap_cfg = config["capacity"]
     endpoints = config["endpoints"]
+    if endpoints_filter:
+        unknown = set(endpoints_filter) - set(endpoints)
+        if unknown:
+            logger.warning("Unknown endpoint(s) in --endpoints filter: %s", ", ".join(sorted(unknown)))
+        endpoints = {k: v for k, v in endpoints.items() if k in endpoints_filter}
+        if not endpoints:
+            logger.error("No matching endpoints after applying --endpoints filter: %s", endpoints_filter)
+            return []
     query_files = config["queries"]
     warm_reps = config.get("warm_repetitions", 3)
     timeout_sec = config.get("query_timeout_sec", 300)
@@ -202,6 +216,16 @@ def main() -> None:
         help="Scale factors to run (e.g. --sf SF10 SF100). Defaults to all in config.",
     )
     parser.add_argument(
+        "--endpoints",
+        nargs="+",
+        default=None,
+        metavar="ENDPOINT_ID",
+        help=(
+            "Run only these endpoint IDs (e.g. --endpoints warehouse_frag lakehouse_frag). "
+            "Defaults to all endpoints in config.yaml."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be executed without actually running queries or touching capacity.",
@@ -216,7 +240,7 @@ def main() -> None:
         logger.error("No scale factors specified. Use --sf or set scale_factors in config.yaml.")
         sys.exit(1)
 
-    run_benchmark(config, scale_factors, dry_run=args.dry_run)
+    run_benchmark(config, scale_factors, dry_run=args.dry_run, endpoints_filter=args.endpoints)
 
 
 if __name__ == "__main__":
