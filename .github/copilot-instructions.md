@@ -34,6 +34,11 @@ fablab-sql-endpoint/
 │   ├── config.yaml                   ← test matrix definition
 │   ├── connection.py                 ← pyodbc connection management
 │   └── utils.py                      ← timer, logging, result serialization
+├── fragmentation/
+│   ├── 00_setup_wh_frag.sql          ← DDL empty store_sales + CTAS 7 dimensions → benchmark_frag (WH)
+│   ├── 00_setup_lh_frag.ipynb        ← Spark: compact dimensions + fragmented store_sales (LH)
+│   ├── 01_insert_wh.py               ← OFFSET/FETCH INSERT loop with checkpoint (WH)
+│   └── README.md
 ├── results/                          ← CSV/JSON output (committed to repo)
 ├── analysis/
 │   └── analyze_results.ipynb         ← comparison charts and statistics
@@ -52,6 +57,8 @@ fablab-sql-endpoint/
 | `lakehouse_partitioned` | Lakehouse SQL endpoint | PARTITION BY `ss_sold_date_sk` |
 | `lakehouse_vorder` | Lakehouse SQL endpoint | V-Order enabled at write time |
 | `warehouse` | Fabric Warehouse | Standard configuration |
+| `lakehouse_frag` | Lakehouse SQL endpoint | Fragmented — `store_sales` with ~288K Parquet files (1K rows each) |
+| `warehouse_frag` | Fabric Warehouse | Fragmented — `store_sales` with ~28.8K Parquet files (~10K rows each) |
 
 > **Note on OPTIMIZE**: after ingesting each configuration, `OPTIMIZE` (without ZORDER) is run on all tables for Parquet file compaction. This is standard Delta maintenance, not a benchmark configuration. ZORDER was discarded due to disproportionate cost at scale.
 
@@ -98,6 +105,9 @@ fablab-sql-endpoint/
 11. **`overwriteSchema=True` on Delta writes** — the lakehouse ingestion notebook uses `.option('overwriteSchema', 'true')` on all Delta write operations. This is required when tables already exist with a prior schema (e.g. `_c0` columns from a previous `inferSchema` run), since Delta rejects schema changes by default. Combined with `mode('overwrite')`, tables are fully recreated with the correct schema.
 12. **SF10 for ingestion validation only** — SF10 data was ingested to validate the pipeline (dsdgen → CSV → Delta → OPTIMIZE) and verify query execution. SF10 results are not included in the final benchmark report. The benchmark runner runs exclusively on SF100.
 13. **Warehouse ingestion via T-SQL CTAS cross-database** — the `com.microsoft.fabric.spark.write` Spark connector is only available inside native Fabric notebooks, not in external Livy sessions. Warehouse tables are populated using `CREATE TABLE benchmark.<table> AS SELECT * FROM [LH_01].[benchmark_default].<table>` executed via `sqlcmd` against the WH_01 SQL endpoint. This leverages Fabric's native cross-database query capability (same workspace, 3-part naming). Script: `ingestion/02_warehouse_ingest.sql`.
+14. **Fragmentation experiment uses a new schema `benchmark_frag`** in both endpoints. Dimensions are copied compactly (CTAS in WH, Spark write in LH). `store_sales` is created fragmented: Lakehouse via a single Spark job with `maxRecordsPerFile=1000` (~288K files of 1K rows); Warehouse via `01_insert_wh.py` OFFSET/FETCH loop inserting from `benchmark.store_sales` into an initially empty `benchmark_frag.store_sales` (~28.8K files of 10K rows). The original `benchmark` / `benchmark_default` schemas are untouched and serve as baseline.
+15. **`runner.py --endpoints` flag** — pass one or more endpoint IDs to run only those endpoints, e.g. `py benchmark/runner.py --endpoints warehouse_frag lakehouse_frag`. If omitted, all endpoints in config.yaml run. This avoids re-running baseline endpoints when measuring fragmentation.
+16. **`fragmentation/01_insert_wh.py` checkpoint** — the script saves progress to a JSON file (default: `fragmentation/.wh_insert_checkpoint.json`) after each INSERT. If interrupted, re-running the script continues from where it left off. Use `--checkpoint-file` to override the path.
 
 ---
 

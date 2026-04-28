@@ -1,8 +1,8 @@
 # Especificaciones del Proyecto: Benchmark TPC-DS — Lakehouse SQL Endpoint vs Fabric Warehouse
 
-**Versión**: 1.8  
+**Versión**: 1.9  
 **Autor**: Nelson López  
-**Fecha**: 2026-04-10  
+**Fecha**: 2026-04-20  
 **Estado**: Revisado
 
 ---
@@ -26,6 +26,7 @@ El resultado del proyecto será un conjunto de métricas objetivas (latencias, f
 - Ingesta de datos en Lakehouse y Warehouse (no se mide)
 - Exportación de resultados a CSV y JSON
 - Análisis comparativo mediante notebook Python en Fabric
+- **Experimento de fragmentación**: estudio del impacto de ficheros Parquet pequeños en el rendimiento de queries, sobre Lakehouse y Warehouse (schema `benchmark_frag`)
 
 ### Fuera del alcance
 - Medición del tiempo de generación de datos o ingesta
@@ -230,6 +231,11 @@ fablab-sql-endpoint/
 │   ├── config.yaml                # Matriz de pruebas
 │   ├── connection.py              # Gestión de conexiones pyodbc
 │   └── utils.py                  # Timer, logging, serialización
+├── fragmentation/
+│   ├── 00_setup_wh_frag.sql      # DDL vacío store_sales + CTAS dimensiones → benchmark_frag (WH)
+│   ├── 00_setup_lh_frag.ipynb    # Spark: dimensiones compactas + store_sales fragmentada (LH)
+│   ├── 01_insert_wh.py           # Loop INSERT OFFSET/FETCH con checkpoint (WH)
+│   └── README.md                 # Instrucciones del experimento
 ├── results/                       # Salida CSV/JSON (incluida en el repositorio)
 ├── analysis/
 │   └── analyze_results.ipynb      # Análisis comparativo
@@ -287,3 +293,54 @@ Todas las configuraciones sensibles se gestionan mediante variables de entorno (
 | `WAREHOUSE_SERVER` | FQDN del SQL endpoint del Warehouse | — |
 | `WAREHOUSE_DATABASE` | Nombre de la base de datos del Warehouse | — |
 | `TENANT_ID` | ID del tenant de Azure AD | — |
+
+---
+
+## 13. Experimento de fragmentación
+
+### Objetivo
+
+Estudiar cómo afecta la fragmentación de ficheros Parquet pequeños al rendimiento de las queries Q1–Q5 en el **Fabric Warehouse** (`WH_01`) y el **Lakehouse SQL endpoint** (`LH_01`), comparando con los esquemas baseline ya medidos.
+
+### Metodología
+
+Se crea un nuevo schema `benchmark_frag` en ambos endpoints con las mismas 8 tablas. Las 7 tablas de dimensiones se copian de forma compacta (no afectan la prueba). La tabla `store_sales` se crea fragmentada:
+
+| Endpoint | Método | Resultado |
+|----------|--------|-----------|
+| Lakehouse | Un único Spark job con `maxRecordsPerFile=1000` | ~288.000 ficheros Parquet de 1.000 filas |
+| Warehouse | Loop de INSERTs (`OFFSET/FETCH`) via pyodbc | ~28.800 ficheros de ~10.000 filas |
+
+La tabla `store_sales` en `benchmark_frag` contiene las mismas **287.997.099 filas** que los schemas baseline (SF100), pero distribuidas en muchos ficheros pequeños en lugar de unos pocos compactos.
+
+### Nuevos endpoints
+
+| Endpoint ID | Tipo | Schema |
+|-------------|------|--------|
+| `lakehouse_frag` | Lakehouse SQL endpoint | `benchmark_frag` |
+| `warehouse_frag` | Fabric Warehouse | `benchmark_frag` |
+
+### Scripts
+
+| Script | Descripción |
+|--------|-------------|
+| `fragmentation/00_setup_wh_frag.sql` | Crea schema `benchmark_frag` en WH. Crea `store_sales` vacía (DDL, sin datos). Copia las 7 dimensiones con CTAS desde `benchmark`. |
+| `fragmentation/00_setup_lh_frag.ipynb` | Notebook Fabric PySpark. Copia dimensiones compactas. Escribe `store_sales` con `maxRecordsPerFile=1000`. |
+| `fragmentation/01_insert_wh.py` | Inserta todas las filas en `benchmark_frag.store_sales` (WH) en batches con `OFFSET/FETCH` desde `benchmark.store_sales`. Soporta checkpoint para pausar y retomar entre sesiones. CLI: `--batch-size`, `--dry-run`, `--checkpoint-file`. |
+
+### Ejecución del benchmark fragmentado
+
+```bash
+py benchmark/runner.py --endpoints warehouse_frag lakehouse_frag
+```
+
+El flag `--endpoints` filtra los endpoints activos para ejecutar solo los especificados, sin tocar los endpoints baseline.
+
+### Comparativa de configuraciones
+
+| Config | Schema | store_sales | Ficheros aprox. |
+|--------|--------|-------------|-----------------|
+| Baseline Lakehouse | `benchmark_default` | Compacta (post-OPTIMIZE) | ~100–200 |
+| Fragmentada Lakehouse | `benchmark_frag` | 1.000 filas/fichero | ~288.000 |
+| Baseline Warehouse | `benchmark` | Compacta (CTAS bulk) | ~100–200 |
+| Fragmentada Warehouse | `benchmark_frag` | ~10.000 filas/fichero | ~28.800 |
