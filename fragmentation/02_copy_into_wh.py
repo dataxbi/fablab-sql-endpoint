@@ -3,28 +3,31 @@ fragmentation/02_copy_into_wh.py
 Load benchmark_frag.store_sales in Fabric Warehouse with many small Parquet files
 to simulate table fragmentation via CSV COPY INTO.
 
+NOTE: Fabric Warehouse COPY INTO does NOT support GZIP-compressed CSV files
+(codec error -5 / invalid input stream). Plain CSV is required.
+
 Approach:
-  1. Split store_sales.csv (WSL) into {CHUNK_ROWS}-row chunks, strip trailing pipe,
-     and gzip each chunk in parallel.
-  2. Upload gzipped chunks to OneLake via azcopy (AZCOPY_AUTO_LOGIN_TYPE=AZCLI).
-  3. Run COPY INTO for each .csv.gz file using {WORKERS} parallel WH connections.
+  1. Split store_sales.csv (WSL) into {CHUNK_ROWS}-row chunks, stripping trailing
+     pipe characters. Output: plain .csv files (no compression).
+  2. Upload .csv chunks to OneLake via azcopy (AZCOPY_AUTO_LOGIN_TYPE=AZCLI).
+  3. Run COPY INTO for each .csv file using {WORKERS} parallel WH connections.
      Each COPY INTO execution is one transaction → one small Parquet file in WH.
 
 Usage:
-    # Full pipeline (split + gzip + upload + COPY INTO)
-    py fragmentation/02_copy_into_wh.py
+    # Full pipeline (split + upload + COPY INTO)
+    .venv\\Scripts\\python.exe fragmentation/02_copy_into_wh.py
 
-    # Skip split+gzip (chunks already exist in WSL)
-    py fragmentation/02_copy_into_wh.py --skip-split
+    # Skip split (chunks already exist in WSL as .csv)
+    .venv\\Scripts\\python.exe fragmentation/02_copy_into_wh.py --skip-split
 
-    # Skip split+gzip+upload (files already in OneLake)
-    py fragmentation/02_copy_into_wh.py --skip-split --skip-upload
+    # Skip split+upload (files already in OneLake)
+    .venv\\Scripts\\python.exe fragmentation/02_copy_into_wh.py --skip-split --skip-upload
 
     # Test COPY INTO with the first file only, then exit
-    py fragmentation/02_copy_into_wh.py --skip-split --skip-upload --test
+    .venv\\Scripts\\python.exe fragmentation/02_copy_into_wh.py --skip-split --skip-upload --test
 
     # Dry run: print SQL without executing
-    py fragmentation/02_copy_into_wh.py --skip-split --skip-upload --dry-run
+    .venv\\Scripts\\python.exe fragmentation/02_copy_into_wh.py --skip-split --skip-upload --dry-run
 
 Prerequisites:
     - WSL 2 with Ubuntu installed.
@@ -72,6 +75,29 @@ DEFAULT_CHECKPOINT_FILE = Path(__file__).parent / ".copy_into_checkpoint.json"
 # OneLake endpoints
 _BLOB_BASE = "https://onelake.blob.fabric.microsoft.com"
 _DFS_BASE = "https://onelake.dfs.fabric.microsoft.com"
+
+# Well-known locations where azcopy may be installed but not on PATH
+_AZCOPY_FALLBACK_DIRS = [
+    Path.home() / "bin",
+    Path("C:/tools"),
+    Path("C:/azcopy"),
+]
+
+
+def _find_azcopy() -> str:
+    """Return the azcopy executable path, searching fallback dirs if not on PATH."""
+    import shutil
+    exe = shutil.which("azcopy")
+    if exe:
+        return exe
+    for d in _AZCOPY_FALLBACK_DIRS:
+        candidate = d / "azcopy.exe"
+        if candidate.exists():
+            return str(candidate)
+    raise FileNotFoundError(
+        "azcopy not found on PATH or in known locations. "
+        "Install from https://aka.ms/downloadazcopy-v10-windows and add to PATH."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,41 +156,49 @@ def _save_checkpoint(path: Path, completed: list[str]) -> None:
 # ---------------------------------------------------------------------------
 
 def phase_split(wsl_src_csv: str, wsl_chunks_dir: str, chunk_rows: int, dry_run: bool) -> None:
-    """Split store_sales.csv into chunk_rows-row chunks, strip trailing pipes, gzip."""
-    logger.info("Phase 1: Split + gzip — chunk_rows=%d", chunk_rows)
+    """Split store_sales.csv into chunk_rows-row chunks, stripping trailing pipes.
 
-    # Check how many .csv.gz files already exist
-    count_gz = int(_wsl_output(
-        f"ls {wsl_chunks_dir}/part_*.csv.gz 2>/dev/null | wc -l"
+    Fabric Warehouse COPY INTO does not support GZIP-compressed CSV files, so
+    chunks are stored as plain .csv files (no compression).
+    """
+    logger.info("Phase 1: Split — chunk_rows=%d", chunk_rows)
+
+    # Check how many .csv files already exist
+    count_csv = int(_wsl_output(
+        f"ls {wsl_chunks_dir}/part_*.csv 2>/dev/null | wc -l"
     ) or "0")
-    if count_gz > 0:
-        logger.info("Phase 1 skipped: %d .csv.gz chunks already found in %s.",
-                    count_gz, wsl_chunks_dir)
+    if count_csv > 0:
+        logger.info("Phase 1 skipped: %d .csv chunks already found in %s.",
+                    count_csv, wsl_chunks_dir)
         return
 
     if dry_run:
-        logger.info("[DRY-RUN] Would split %s → %s (chunk_rows=%d) + gzip.",
+        logger.info("[DRY-RUN] Would split %s → %s (chunk_rows=%d).",
                     wsl_src_csv, wsl_chunks_dir, chunk_rows)
         return
 
-    # The sed step strips a trailing '|' that dsdgen appends to each line.
-    # Without it, COPY INTO would see 24 fields instead of 23.
-    script = (
-        f"set -e; "
-        f"mkdir -p {wsl_chunks_dir}; "
-        f"echo 'Splitting {wsl_src_csv}...'; "
-        f"split -l {chunk_rows} --numeric-suffixes=1 --suffix-length=5 "
-        f"  --additional-suffix=.csv {wsl_src_csv} {wsl_chunks_dir}/part_; "
-        f"echo 'Split done. Stripping trailing pipes and gzipping (8 workers)...'; "
-        f"find {wsl_chunks_dir} -name 'part_*.csv' "
-        f"  | xargs -P8 -I{{}} bash -c "
-        f"    'sed \"s/|\\s*$//\" \"$1\" | gzip > \"$1.gz\" && rm \"$1\"' _ {{}}; "
-        f"echo 'Gzip done.'"
+    logger.info("Running WSL split + sed (strip trailing |). This may take ~5-10 minutes...")
+    # Write a helper script via stdin to avoid shell quoting issues through
+    # Python subprocess → WSL. sed strips the trailing '|' that dsdgen
+    # appends to each row so COPY INTO sees exactly 23 fields.
+    helper_script = "/tmp/split_chunk.sh"
+    helper_content = (
+        b"#!/bin/bash\n"
+        b"set -e\n"
+        b"mkdir -p \"$2\"\n"
+        b"sed 's/|[[:space:]]*$//' \"$1\" | split -l \"$3\" "
+        b"  --numeric-suffixes=1 --suffix-length=5 "
+        b"  --additional-suffix=.csv - \"$2/part_\"\n"
+        b"echo \"Split done.\"\n"
     )
-    logger.info("Running WSL split+gzip. This may take 20-30 minutes...")
-    _wsl_run(script)
+    subprocess.run(
+        ["wsl", "--", "bash", "-c",
+         f"cat > {helper_script} && chmod +x {helper_script}"],
+        input=helper_content, check=True,
+    )
+    _wsl_run(f"{helper_script} {wsl_src_csv} {wsl_chunks_dir} {chunk_rows}")
     count = int(_wsl_output(
-        f"ls {wsl_chunks_dir}/part_*.csv.gz 2>/dev/null | wc -l"
+        f"ls {wsl_chunks_dir}/part_*.csv 2>/dev/null | wc -l"
     ))
     logger.info("Phase 1 complete: %d chunks ready.", count)
 
@@ -174,8 +208,8 @@ def phase_split(wsl_src_csv: str, wsl_chunks_dir: str, chunk_rows: int, dry_run:
 # ---------------------------------------------------------------------------
 
 def phase_upload(wsl_chunks_dir: str, blob_url: str, dry_run: bool) -> None:
-    """Upload .csv.gz chunks from WSL to OneLake via azcopy."""
-    logger.info("Phase 2: Uploading chunks to OneLake...")
+    """Upload .csv chunks from WSL to OneLake via azcopy."""
+    logger.info("Phase 2: Uploading .csv chunks to OneLake...")
 
     win_path = _wsl_chunks_to_win_path(wsl_chunks_dir)
     logger.info("  Source: %s", win_path)
@@ -188,10 +222,12 @@ def phase_upload(wsl_chunks_dir: str, blob_url: str, dry_run: bool) -> None:
     env = os.environ.copy()
     env["AZCOPY_AUTO_LOGIN_TYPE"] = "AZCLI"
     t0 = time.monotonic()
+    azcopy = _find_azcopy()
+    logger.info("  Using azcopy: %s", azcopy)
     subprocess.run(
         [
-            "azcopy", "copy",
-            f"{win_path}\\*.csv.gz",
+            azcopy, "copy",
+            f"{win_path}\\*.csv",
             f"{blob_url}/",
             "--recursive=false",
             "--trusted-microsoft-suffixes=*.fabric.microsoft.com",
@@ -208,10 +244,12 @@ def phase_upload(wsl_chunks_dir: str, blob_url: str, dry_run: bool) -> None:
 # ---------------------------------------------------------------------------
 
 def _build_copy_into_sql(dfs_url: str, filename: str) -> str:
+    # Fabric Warehouse COPY INTO does not support GZIP-compressed CSV files;
+    # plain CSV with auto-detected encoding is used instead.
     return (
         f"COPY INTO benchmark_frag.store_sales "
         f"FROM '{dfs_url}/{filename}' "
-        f"WITH (FILE_TYPE = 'CSV', COMPRESSION = 'GZIP', FIELDTERMINATOR = '|')"
+        f"WITH (FILE_TYPE = 'CSV', FIELDTERMINATOR = '|')"
     )
 
 
@@ -280,20 +318,29 @@ def phase_copy_into(
     truncate_first: bool,
     dry_run: bool,
     test_only: bool,
+    total_chunks: int = 0,
 ) -> None:
-    """Run parallel COPY INTO for all .csv.gz chunks."""
+    """Run parallel COPY INTO for all .csv chunks."""
     logger.info("Phase 3: COPY INTO with %d parallel workers.", workers)
 
-    # Get file list from WSL
+    # Try to get the file list from WSL; fall back to a Python-generated list for
+    # detached/CI environments where the wsl binary may not be accessible.
     raw = _wsl_output(
-        f"ls {wsl_chunks_dir}/part_*.csv.gz 2>/dev/null | xargs -I{{}} basename {{}}"
+        f"ls {wsl_chunks_dir}/part_*.csv 2>/dev/null | xargs -I{{}} basename {{}}"
     )
     all_files = [f.strip() for f in raw.splitlines() if f.strip()]
     if not all_files:
-        logger.error("No .csv.gz files found in %s — run Phase 1 first.", wsl_chunks_dir)
-        sys.exit(1)
+        if total_chunks and total_chunks > 0:
+            all_files = [f"part_{i:05d}.csv" for i in range(1, total_chunks + 1)]
+            logger.warning(
+                "WSL unavailable — using generated file list: part_00001.csv … part_%05d.csv (%d files).",
+                total_chunks, total_chunks,
+            )
+        else:
+            logger.error("No .csv files found in %s — run Phase 1 first.", wsl_chunks_dir)
+            sys.exit(1)
 
-    logger.info("Total .csv.gz files: %d", len(all_files))
+    logger.info("Total .csv files: %d", len(all_files))
 
     if test_only:
         logger.info("TEST MODE: running COPY INTO for 1 file only.")
@@ -398,14 +445,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Load benchmark_frag.store_sales in WH_01 via CSV COPY INTO. "
-            "Splits store_sales.csv into 10K-row gzipped chunks in WSL, uploads to "
-            "OneLake, then runs parallel COPY INTO (one per file = one Parquet file)."
+            "Splits store_sales.csv into 10K-row plain CSV chunks in WSL, uploads to "
+            "OneLake, then runs parallel COPY INTO (one per file = one Parquet file). "
+            "Note: Fabric Warehouse COPY INTO does not support GZIP-compressed CSV."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
         "--skip-split", action="store_true",
-        help="Skip WSL split+gzip phase (chunks already exist).",
+        help="Skip WSL split phase (plain .csv chunks already exist).",
     )
     parser.add_argument(
         "--skip-upload", action="store_true",
@@ -418,6 +466,13 @@ def main() -> None:
     parser.add_argument(
         "--workers", type=int, default=DEFAULT_WORKERS,
         help="Number of parallel WH connections for COPY INTO.",
+    )
+    parser.add_argument(
+        "--total-chunks", type=int, default=28800,
+        help=(
+            "Total number of CSV chunk files (part_00001.csv … part_NNNNN.csv). "
+            "Used as fallback when WSL is unavailable to list the chunks directory."
+        ),
     )
     parser.add_argument(
         "--chunk-rows", type=int, default=DEFAULT_CHUNK_ROWS,
@@ -486,6 +541,7 @@ def main() -> None:
         truncate_first=not args.no_truncate,
         dry_run=args.dry_run,
         test_only=args.test,
+        total_chunks=args.total_chunks,
     )
 
 

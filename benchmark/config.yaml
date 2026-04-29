@@ -64,8 +64,10 @@ queries:
 # Warm repetitions (cold is always 1 rep per SF block)
 warm_repetitions: 3
 
-# Query timeout in seconds (per execution)
-query_timeout_sec: 300
+# Query timeout in seconds (per execution).
+# LH frag queries can take up to ~1700s (288K small files). The Fabric ODBC driver
+# does not reliably enforce cursor.timeout, but we set 2000s as a safety upper bound.
+query_timeout_sec: 2000
 
 # Output directory for results
 results_dir: results

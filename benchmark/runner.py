@@ -2,15 +2,20 @@
 benchmark/runner.py
 Main TPC-DS benchmark runner for Fabric SQL endpoints.
 
-Execution order per scale-factor block:
-  1. Resume Fabric capacity  → poll until Active
+Execution order per scale-factor block (default):
+  1. Pause + Resume Fabric capacity  → flush caches for cold start
   2. Cold block: run all (endpoint × query) once
   3. Warm block: run all (endpoint × query) N times
-  4. Pause Fabric capacity   → poll until Paused
+  4. Pause Fabric capacity
+
+With --warm-only:
+  - Skip pause/resume, skip cold block, skip final pause.
+  - Only runs the warm block (capacity must already be Active).
 
 Usage:
     py benchmark/runner.py [--config benchmark/config.yaml] [--sf SF10 SF100]
-                           [--endpoints warehouse_frag lakehouse_frag] [--dry-run]
+                           [--endpoints warehouse_frag lakehouse_frag]
+                           [--warm-only] [--dry-run]
 """
 
 import argparse
@@ -48,6 +53,7 @@ def _execute_query(
     """
     try:
         cursor = conn.cursor()
+        cursor.timeout = timeout_sec  # pyodbc SQL_ATTR_QUERY_TIMEOUT (seconds)
         cursor.execute(sql)
         rows = cursor.fetchall()
         return len(rows), "success"
@@ -109,6 +115,7 @@ def run_benchmark(
     scale_factors: list[str],
     dry_run: bool,
     endpoints_filter: list[str] | None = None,
+    warm_only: bool = False,
 ) -> list[RunResult]:
     cap_cfg = config["capacity"]
     endpoints = config["endpoints"]
@@ -137,7 +144,7 @@ def run_benchmark(
         logger.info("Starting scale factor block: %s", sf)
         logger.info("=" * 60)
 
-        if not dry_run:
+        if not dry_run and not warm_only:
             # Pause first to flush all in-memory caches, then resume.
             # This guarantees a true cold start even if the capacity was already Active.
             # pause_capacity() is a no-op if already Paused.
@@ -157,14 +164,15 @@ def run_benchmark(
             )
 
         # --- Cold block (1 repetition each) ---
-        logger.info("Cold block (%s)...", sf)
-        for ep_id, ep_cfg in endpoints.items():
-            for qid, sql in queries.items():
-                if dry_run:
-                    logger.info("[DRY-RUN] cold | %s | %s | %s", sf, ep_id, qid)
-                    continue
-                result = run_query(ep_id, ep_cfg, qid, sql, "cold", 1, sf, timeout_sec)
-                all_results.append(result)
+        if not warm_only:
+            logger.info("Cold block (%s)...", sf)
+            for ep_id, ep_cfg in endpoints.items():
+                for qid, sql in queries.items():
+                    if dry_run:
+                        logger.info("[DRY-RUN] cold | %s | %s | %s", sf, ep_id, qid)
+                        continue
+                    result = run_query(ep_id, ep_cfg, qid, sql, "cold", 1, sf, timeout_sec)
+                    all_results.append(result)
 
         # --- Warm block (N repetitions each) ---
         logger.info("Warm block (%s, %d reps)...", sf, warm_reps)
@@ -177,7 +185,7 @@ def run_benchmark(
                     result = run_query(ep_id, ep_cfg, qid, sql, "warm", rep, sf, timeout_sec)
                     all_results.append(result)
 
-        if not dry_run:
+        if not dry_run and not warm_only:
             logger.info("Pausing Fabric capacity after %s block...", sf)
             pause_capacity(
                 subscription_id=os.path.expandvars(cap_cfg["subscription_id"]),
@@ -226,6 +234,14 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--warm-only",
+        action="store_true",
+        help=(
+            "Skip capacity pause/resume, skip the cold block, and skip the final pause. "
+            "Runs only the warm block. Capacity must already be Active."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be executed without actually running queries or touching capacity.",
@@ -240,7 +256,13 @@ def main() -> None:
         logger.error("No scale factors specified. Use --sf or set scale_factors in config.yaml.")
         sys.exit(1)
 
-    run_benchmark(config, scale_factors, dry_run=args.dry_run, endpoints_filter=args.endpoints)
+    run_benchmark(
+        config,
+        scale_factors,
+        dry_run=args.dry_run,
+        endpoints_filter=args.endpoints,
+        warm_only=args.warm_only,
+    )
 
 
 if __name__ == "__main__":

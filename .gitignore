@@ -52,3 +52,11 @@ Thumbs.db
 # Fragmentation experiment — WH insert checkpoint (runtime state, not source)
 fragmentation/.wh_insert_checkpoint.json
 fragmentation/.wh_insert_checkpoint.tmp
+
+# Runtime logs
+*.log
+fragmentation/insert_wh_*.log
+results/run_*.log
+
+# Compressed intermediate files
+*.gz
