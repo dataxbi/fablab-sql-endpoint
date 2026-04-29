@@ -41,40 +41,53 @@ Fabric PySpark notebook. Copies dimension tables from `benchmark_default` and wr
 
 ---
 
-### `01_insert_wh.py` — Warehouse insert loop (long-running, resumable)
+### `01_insert_wh.py` — ~~Warehouse insert loop~~ (deprecated: too slow)
 
-Inserts all rows from `benchmark.store_sales` into `benchmark_frag.store_sales` in batches
-using `OFFSET/FETCH`. Each INSERT creates a separate Parquet file.
+> **Deprecated**: OFFSET/FETCH degrades fatally on Fabric Warehouse as the offset grows
+> (50+ s/batch at batch 1,200). Use `02_copy_into_wh.py` instead.
+
+---
+
+### `02_copy_into_wh.py` — Warehouse COPY INTO via CSV (recommended)
+
+Faster approach: splits `store_sales.csv` (SF100) in WSL into 10K-row gzipped chunks,
+uploads them to OneLake, then runs `COPY INTO` in parallel (one statement per file).
+Each `COPY INTO` = one transaction = one small Parquet file in WH.
+
+**Prerequisites:**
+- `store_sales.csv` for SF100 at `~/tpcds-data/sf100/store_sales.csv` inside WSL
+- `azcopy` on PATH; `az login` active
+- `benchmark_frag.store_sales` exists (run `00_setup_wh_frag.sql` first)
+- `FABRIC_WORKSPACE_ID` and `FABRIC_LAKEHOUSE_ID` set in `.env`
 
 ```bash
-# Dry run (no actual inserts — counts batches only)
-py fragmentation/01_insert_wh.py --dry-run
+# Full pipeline: split → gzip → upload → COPY INTO
+py fragmentation/02_copy_into_wh.py
 
-# Default: 10,000 rows/batch (~28,800 batches, ~24–40 h total)
-py fragmentation/01_insert_wh.py
+# Skip split+gzip if chunks already exist in WSL:
+py fragmentation/02_copy_into_wh.py --skip-split
 
-# Custom batch size
-py fragmentation/01_insert_wh.py --batch-size 5000
+# Skip upload too (files already in OneLake):
+py fragmentation/02_copy_into_wh.py --skip-split --skip-upload
+
+# Test with 1 file before launching full run:
+py fragmentation/02_copy_into_wh.py --skip-split --skip-upload --test
+
+# Resume after interruption (checkpoint is in .copy_into_checkpoint.json):
+py fragmentation/02_copy_into_wh.py --skip-split --skip-upload --no-truncate
 ```
 
-**Checkpoint**: progress is saved to `fragmentation/.wh_insert_checkpoint.json` after each
-batch. If the script is interrupted (Ctrl+C or session end), re-run the same command and it
-will resume from the last completed batch.
+**Estimated runtimes** (SF100, 287M rows, 28,800 files, 8 workers):
 
-To start over from scratch, delete the checkpoint file:
-```bash
-Remove-Item fragmentation/.wh_insert_checkpoint.json
-```
+| Phase | Estimated time |
+|-------|---------------|
+| Split + gzip (WSL, 8 workers) | ~20–30 min |
+| azcopy upload to OneLake (~6–8 GB) | ~10–15 min |
+| 28,800 × COPY INTO (8 parallel workers) | ~2 h |
+| **Total** | **~3–4 h** |
 
-**Estimated runtimes** (SF100, 288M rows):
-
-| `--batch-size` | Batches | Estimated time |
-|----------------|---------|----------------|
-| 10,000 (default) | ~28,800 | ~24–40 h |
-| 50,000 | ~5,760 | ~5–8 h |
-| 100,000 | ~2,880 | ~3–5 h |
-
-> Larger batches = fewer files = less fragmentation. Use the default for maximum fragmentation.
+**Checkpoint**: COPY INTO progress saved to `fragmentation/.copy_into_checkpoint.json`.
+Re-run with `--skip-split --skip-upload --no-truncate` to resume after interruption.
 
 ---
 
@@ -94,4 +107,5 @@ Compare fragmented vs. baseline latencies in `analysis/analyze_results.ipynb`.
 
 ## Files generated (git-ignored)
 
-- `fragmentation/.wh_insert_checkpoint.json` — WH insert progress checkpoint
+- `fragmentation/.wh_insert_checkpoint.json` — OFFSET/FETCH insert progress (deprecated)
+- `fragmentation/.copy_into_checkpoint.json` — COPY INTO progress checkpoint

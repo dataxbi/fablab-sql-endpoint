@@ -37,7 +37,8 @@ fablab-sql-endpoint/
 ├── fragmentation/
 │   ├── 00_setup_wh_frag.sql          ← DDL empty store_sales + CTAS 7 dimensions → benchmark_frag (WH)
 │   ├── 00_setup_lh_frag.ipynb        ← Spark: compact dimensions + fragmented store_sales (LH)
-│   ├── 01_insert_wh.py               ← OFFSET/FETCH INSERT loop with checkpoint (WH)
+│   ├── 01_insert_wh.py               ← OFFSET/FETCH INSERT loop with checkpoint (WH) [deprecated]
+│   ├── 02_copy_into_wh.py            ← CSV split→gzip→azcopy→parallel COPY INTO (WH) [recommended]
 │   └── README.md
 ├── results/                          ← CSV/JSON output (committed to repo)
 ├── analysis/
@@ -105,9 +106,10 @@ fablab-sql-endpoint/
 11. **`overwriteSchema=True` on Delta writes** — the lakehouse ingestion notebook uses `.option('overwriteSchema', 'true')` on all Delta write operations. This is required when tables already exist with a prior schema (e.g. `_c0` columns from a previous `inferSchema` run), since Delta rejects schema changes by default. Combined with `mode('overwrite')`, tables are fully recreated with the correct schema.
 12. **SF10 for ingestion validation only** — SF10 data was ingested to validate the pipeline (dsdgen → CSV → Delta → OPTIMIZE) and verify query execution. SF10 results are not included in the final benchmark report. The benchmark runner runs exclusively on SF100.
 13. **Warehouse ingestion via T-SQL CTAS cross-database** — the `com.microsoft.fabric.spark.write` Spark connector is only available inside native Fabric notebooks, not in external Livy sessions. Warehouse tables are populated using `CREATE TABLE benchmark.<table> AS SELECT * FROM [LH_01].[benchmark_default].<table>` executed via `sqlcmd` against the WH_01 SQL endpoint. This leverages Fabric's native cross-database query capability (same workspace, 3-part naming). Script: `ingestion/02_warehouse_ingest.sql`.
-14. **Fragmentation experiment uses a new schema `benchmark_frag`** in both endpoints. Dimensions are copied compactly (CTAS in WH, Spark write in LH). `store_sales` is created fragmented: Lakehouse via a single Spark job with `maxRecordsPerFile=1000` (~288K files of 1K rows); Warehouse via `01_insert_wh.py` OFFSET/FETCH loop inserting from `benchmark.store_sales` into an initially empty `benchmark_frag.store_sales` (~28.8K files of 10K rows). The original `benchmark` / `benchmark_default` schemas are untouched and serve as baseline.
+14. **Fragmentation experiment uses a new schema `benchmark_frag`** in both endpoints. Dimensions are copied compactly (CTAS in WH, Spark write in LH). `store_sales` is created fragmented: Lakehouse via a single Spark job with `maxRecordsPerFile=1000` (~288K files of 1K rows); Warehouse via `02_copy_into_wh.py` CSV COPY INTO approach (~28.8K files of 10K rows). The original `benchmark` / `benchmark_default` schemas are untouched and serve as baseline.
 15. **`runner.py --endpoints` flag** — pass one or more endpoint IDs to run only those endpoints, e.g. `py benchmark/runner.py --endpoints warehouse_frag lakehouse_frag`. If omitted, all endpoints in config.yaml run. This avoids re-running baseline endpoints when measuring fragmentation.
 16. **`fragmentation/01_insert_wh.py` checkpoint** — the script saves progress to a JSON file (default: `fragmentation/.wh_insert_checkpoint.json`) after each INSERT. If interrupted, re-running the script continues from where it left off. Use `--checkpoint-file` to override the path.
+17. **`fragmentation/02_copy_into_wh.py` — CSV COPY INTO approach for WH fragmentation** — replaces the deprecated OFFSET/FETCH approach (`01_insert_wh.py`) which degraded fatally (50+ s/batch) due to full-scan semantics. New approach: split SF100 `store_sales.csv` (WSL) into 28,800 gzipped 10K-row chunks → azcopy to OneLake → 8 parallel `COPY INTO` statements. Each `COPY INTO` = one Delta transaction = one small Parquet file. Estimated total: ~3–4 hours. COPY INTO strips trailing `|` delimiters (added by dsdgen) via `sed 's/|$//'` during the gzip phase. Checkpoint: `fragmentation/.copy_into_checkpoint.json`.
 
 ---
 
