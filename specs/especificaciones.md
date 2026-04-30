@@ -1,8 +1,8 @@
 # Especificaciones del Proyecto: Benchmark TPC-DS — Lakehouse SQL Endpoint vs Fabric Warehouse
 
-**Versión**: 1.9  
+**Versión**: 2.0  
 **Autor**: Nelson López  
-**Fecha**: 2026-04-20  
+**Fecha**: 2026-04-30  
 **Estado**: Revisado
 
 ---
@@ -234,7 +234,8 @@ fablab-sql-endpoint/
 ├── fragmentation/
 │   ├── 00_setup_wh_frag.sql      # DDL vacío store_sales + CTAS dimensiones → benchmark_frag (WH)
 │   ├── 00_setup_lh_frag.ipynb    # Spark: dimensiones compactas + store_sales fragmentada (LH)
-│   ├── 01_insert_wh.py           # Loop INSERT OFFSET/FETCH con checkpoint (WH)
+│   ├── 01_insert_wh.py           # Loop INSERT OFFSET/FETCH con checkpoint (WH) [obsoleto]
+│   ├── 02_copy_into_wh.py        # CSV split→gzip→azcopy→COPY INTO paralelo (WH) [recomendado]
 │   └── README.md                 # Instrucciones del experimento
 ├── results/                       # Salida CSV/JSON (incluida en el repositorio)
 ├── analysis/
@@ -326,7 +327,8 @@ La tabla `store_sales` en `benchmark_frag` contiene las mismas **287.997.099 fil
 |--------|-------------|
 | `fragmentation/00_setup_wh_frag.sql` | Crea schema `benchmark_frag` en WH. Crea `store_sales` vacía (DDL, sin datos). Copia las 7 dimensiones con CTAS desde `benchmark`. |
 | `fragmentation/00_setup_lh_frag.ipynb` | Notebook Fabric PySpark. Hace `DROP TABLE IF EXISTS benchmark_frag.store_sales` (log Delta limpio). Copia dimensiones compactas. Escribe `store_sales` con `maxRecordsPerFile=10000`. |
-| `fragmentation/01_insert_wh.py` | Inserta todas las filas en `benchmark_frag.store_sales` (WH) en batches con `OFFSET/FETCH` desde `benchmark.store_sales`. Soporta checkpoint para pausar y retomar entre sesiones. CLI: `--batch-size`, `--dry-run`, `--checkpoint-file`. |
+| `fragmentation/01_insert_wh.py` | **[Obsoleto]** Inserta filas en `benchmark_frag.store_sales` (WH) en batches con `OFFSET/FETCH`. Degradaba a >50 s/batch por full-scan. Sustituido por `02_copy_into_wh.py`. |
+| `fragmentation/02_copy_into_wh.py` | **[Recomendado]** Divide el CSV de `store_sales` SF100 en 28.800 chunks gzip de 10.000 filas → azcopy a OneLake → 8 `COPY INTO` paralelos. Cada `COPY INTO` genera un fichero Parquet pequeño. Soporta checkpoint (`--checkpoint-file`). |
 
 ### Ejecución del benchmark fragmentado
 
