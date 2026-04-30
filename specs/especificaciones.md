@@ -308,8 +308,8 @@ Se crea un nuevo schema `benchmark_frag` en ambos endpoints con las mismas 8 tab
 
 | Endpoint | Método | Resultado |
 |----------|--------|-----------|
-| Lakehouse | Un único Spark job con `maxRecordsPerFile=1000` | ~288.000 ficheros Parquet de 1.000 filas |
-| Warehouse | Loop de INSERTs (`OFFSET/FETCH`) via pyodbc | ~28.800 ficheros de ~10.000 filas |
+| Lakehouse | Un único Spark job con `maxRecordsPerFile=10000` (DROP TABLE previo para log Delta limpio) | ~28.800 ficheros Parquet de 10.000 filas |
+| Warehouse | CSV COPY INTO paralelo (`02_copy_into_wh.py`) | ~28.800 ficheros de 10.000 filas |
 
 La tabla `store_sales` en `benchmark_frag` contiene las mismas **287.997.099 filas** que los schemas baseline (SF100), pero distribuidas en muchos ficheros pequeños en lugar de unos pocos compactos.
 
@@ -325,7 +325,7 @@ La tabla `store_sales` en `benchmark_frag` contiene las mismas **287.997.099 fil
 | Script | Descripción |
 |--------|-------------|
 | `fragmentation/00_setup_wh_frag.sql` | Crea schema `benchmark_frag` en WH. Crea `store_sales` vacía (DDL, sin datos). Copia las 7 dimensiones con CTAS desde `benchmark`. |
-| `fragmentation/00_setup_lh_frag.ipynb` | Notebook Fabric PySpark. Copia dimensiones compactas. Escribe `store_sales` con `maxRecordsPerFile=1000`. |
+| `fragmentation/00_setup_lh_frag.ipynb` | Notebook Fabric PySpark. Hace `DROP TABLE IF EXISTS benchmark_frag.store_sales` (log Delta limpio). Copia dimensiones compactas. Escribe `store_sales` con `maxRecordsPerFile=10000`. |
 | `fragmentation/01_insert_wh.py` | Inserta todas las filas en `benchmark_frag.store_sales` (WH) en batches con `OFFSET/FETCH` desde `benchmark.store_sales`. Soporta checkpoint para pausar y retomar entre sesiones. CLI: `--batch-size`, `--dry-run`, `--checkpoint-file`. |
 
 ### Ejecución del benchmark fragmentado
@@ -341,6 +341,6 @@ El flag `--endpoints` filtra los endpoints activos para ejecutar solo los especi
 | Config | Schema | store_sales | Ficheros aprox. |
 |--------|--------|-------------|-----------------|
 | Baseline Lakehouse | `benchmark_default` | Compacta (post-OPTIMIZE) | ~100–200 |
-| Fragmentada Lakehouse | `benchmark_frag` | 1.000 filas/fichero | ~288.000 |
+| Fragmentada Lakehouse | `benchmark_frag` | 10.000 filas/fichero | ~28.800 |
 | Baseline Warehouse | `benchmark` | Compacta (CTAS bulk) | ~100–200 |
 | Fragmentada Warehouse | `benchmark_frag` | ~10.000 filas/fichero | ~28.800 |
