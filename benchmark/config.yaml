@@ -46,7 +46,7 @@ endpoints:
     server: "${LAKEHOUSE_SERVER}"
     database: "${LAKEHOUSE_DATABASE}"
     schema: "benchmark_frag"
-    description: "Lakehouse — fragmented store_sales (~288K files of 1K rows via maxRecordsPerFile=1000)"
+    description: "Lakehouse — fragmented store_sales (~28.8K files of 10K rows via maxRecordsPerFile=10000)"
 
 # Scale factors to test (must match ingested data)
 # SF10 was used only for ingestion validation; the benchmark runs exclusively on SF100.
@@ -65,8 +65,8 @@ queries:
 warm_repetitions: 3
 
 # Query timeout in seconds (per execution).
-# LH frag queries can take up to ~1700s (288K small files). The Fabric ODBC driver
-# does not reliably enforce cursor.timeout, but we set 2000s as a safety upper bound.
+# LH frag queries with 28.8K small files are much faster than the previous 288K-file config.
+# 2000s is kept as a safety upper bound for any unexpected slow queries.
 query_timeout_sec: 2000
 
 # Output directory for results

@@ -11,7 +11,7 @@ all **287,997,099 SF100 rows** are present, but split across many small Parquet 
 | Endpoint | Schema | `store_sales` fragmentation |
 |----------|--------|-----------------------------|
 | Lakehouse baseline | `benchmark_default` | Compact (post-OPTIMIZE, ~100–200 files) |
-| **Lakehouse frag** | `benchmark_frag` | ~288,000 files × 1,000 rows |
+| **Lakehouse frag** | `benchmark_frag` | ~28,800 files × 10,000 rows |
 | Warehouse baseline | `benchmark` | Compact (CTAS bulk, ~100–200 files) |
 | **Warehouse frag** | `benchmark_frag` | ~28,800 files × 10,000 rows |
 
@@ -34,8 +34,8 @@ sqlcmd -S <WH_SERVER> -d WH_01 -G \
 
 ### `00_setup_lh_frag.ipynb` — Lakehouse setup (run once, in Fabric)
 
-Fabric PySpark notebook. Copies dimension tables from `benchmark_default` and writes
-`store_sales` with `maxRecordsPerFile=1000` in a single Spark job.
+Fabric PySpark notebook. Drops `benchmark_frag.store_sales` (clean Delta log), copies dimension tables from `benchmark_default` and writes
+`store_sales` with `maxRecordsPerFile=10000` in a single Spark job.
 
 **Upload and run** this notebook in LH_01 on Fabric. Estimated runtime: ~30–60 minutes.
 
