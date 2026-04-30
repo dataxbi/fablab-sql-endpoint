@@ -53,7 +53,6 @@ def _execute_query(
     """
     try:
         cursor = conn.cursor()
-        cursor.timeout = timeout_sec  # pyodbc SQL_ATTR_QUERY_TIMEOUT (seconds)
         cursor.execute(sql)
         rows = cursor.fetchall()
         return len(rows), "success"
